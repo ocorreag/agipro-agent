@@ -1,4 +1,6 @@
 /_pycache_
-/publicaciones
-/memory
-/linea_grafica
+src/publicaciones
+src/memory
+src/linea_grafica
+.env
+src/src/.env
