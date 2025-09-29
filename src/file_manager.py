@@ -10,16 +10,16 @@ from typing import List, Dict, Any, Optional, Tuple
 import streamlit as st
 from datetime import datetime
 import mimetypes
+from path_manager import path_manager
 
 class FileManager:
     def __init__(self):
-        self.memory_dir = Path("src/memory")
-        self.linea_grafica_dir = Path("src/linea_grafica")
-        self.publicaciones_dir = Path("src/publicaciones")
+        self.memory_dir = path_manager.get_path('memory')
+        self.linea_grafica_dir = path_manager.get_path('linea_grafica')
+        self.publicaciones_dir = path_manager.get_path('publicaciones')
 
         # Ensure directories exist
-        for dir_path in [self.memory_dir, self.linea_grafica_dir, self.publicaciones_dir]:
-            dir_path.mkdir(parents=True, exist_ok=True)
+        path_manager.ensure_directories()
 
     def get_memory_files(self) -> List[Dict[str, Any]]:
         """Get all files in the memory directory"""

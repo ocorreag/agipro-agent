@@ -10,6 +10,7 @@ from datetime import datetime
 import time
 from dotenv import load_dotenv
 import glob
+from path_manager import path_manager
 
 load_dotenv()
 
@@ -18,9 +19,9 @@ class SocialMediaImageGenerator:
         self.client = OpenAI()
         # Universal size that works across all social media platforms
         self.universal_size = "1080x1080"  # 1:1 square format - most versatile
-        self.output_dir = Path("publicaciones/imagenes")
+        self.output_dir = path_manager.get_path('imagenes')
         self.output_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # Analizar imágenes de línea gráfica
         self.style_guide = self._analyze_style_guide()
 
@@ -30,41 +31,41 @@ class SocialMediaImageGenerator:
             'colors': [],
             'compositions': []
         }
-        
-        style_dir = Path("linea_grafica")
+
+        style_dir = path_manager.get_path('linea_grafica')
         if not style_dir.exists():
             print("⚠️ Carpeta linea_grafica no encontrada")
             return style_info
-            
+
         try:
             # Corregir el patrón de búsqueda para imágenes
             image_patterns = ['*.jpg', '*.jpeg', '*.png', '*.JPG', '*.JPEG', '*.PNG']
             image_files = []
             for pattern in image_patterns:
                 image_files.extend(style_dir.glob(pattern))
-            
+
             if not image_files:
                 print("⚠️ No se encontraron imágenes en la carpeta linea_grafica")
                 return style_info
-            
+
             for img_path in image_files:
                 print(f"Analizando imagen: {img_path.name}")
                 img = Image.open(img_path)
-                
+
                 # Extraer colores dominantes
                 colors = self._get_dominant_colors(img)
                 style_info['colors'].extend(colors)
-                
+
                 # Analizar composición
                 composition = self._analyze_composition(img)
                 style_info['compositions'].append(composition)
-            
+
             print(f"✓ Analizadas {len(style_info['compositions'])} imágenes de línea gráfica")
             print(f"Colores dominantes encontrados: {', '.join(style_info['colors'][:5])}")
-            
+
         except Exception as e:
             print(f"✗ Error analizando línea gráfica: {str(e)}")
-            
+
         return style_info
 
     def _get_dominant_colors(self, img):
@@ -72,13 +73,13 @@ class SocialMediaImageGenerator:
         # Convertir a RGB si es necesario
         if img.mode != 'RGB':
             img = img.convert('RGB')
-            
+
         # Reducir tamaño para análisis más rápido
         img.thumbnail((150, 150))
-        
+
         # Convertir a lista de pixels
         pixels = list(img.getdata())
-        
+
         # Encontrar colores únicos más frecuentes
         color_counts = {}
         for pixel in pixels:
@@ -86,7 +87,7 @@ class SocialMediaImageGenerator:
                 color_counts[pixel] += 1
             else:
                 color_counts[pixel] = 1
-                
+
         # Obtener los 5 colores más frecuentes
         dominant = sorted(color_counts.items(), key=lambda x: x[1], reverse=True)[:5]
         return [self._rgb_to_hex(color[0]) for color in dominant]
@@ -99,7 +100,7 @@ class SocialMediaImageGenerator:
         """Analiza la composición de la imagen"""
         width, height = img.size
         aspect_ratio = width/height
-        
+
         return {
             'aspect_ratio': aspect_ratio,
             'orientation': 'horizontal' if width > height else 'vertical',
@@ -116,7 +117,7 @@ class SocialMediaImageGenerator:
             Aplica el siguiente estilo visual:
             {style_prompt}
             """
-            
+
             # Generar imagen
             response = self.client.images.generate(
                 model="gpt-image-1",
@@ -131,20 +132,20 @@ class SocialMediaImageGenerator:
             if not image_b64:
                 print(f"✗ Error: No se recibió data de la imagen para {platform}.")
                 return ""
-            
+
             # Decodificar y guardar imagen
             image_bytes = base64.b64decode(image_b64)
             img = Image.open(BytesIO(image_bytes))
-            
+
             safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
             filename = f"{post_date}_{safe_title[:50]}.png"  # No platform prefix since it's universal
             filepath = self.output_dir / filename
-            
+
             img.save(filepath)
             print(f"✓ Imagen guardada: {filename}")
-            
+
             return str(filepath)
-            
+
         except Exception as e:
             print(f"✗ Error generando imagen para {platform}: {str(e)}")
             return ""
@@ -153,12 +154,12 @@ class SocialMediaImageGenerator:
         """Crea un prompt describiendo el estilo visual basado en el análisis de la línea gráfica"""
         if not self.style_guide['colors']:
             return ""
-            
+
         colors_str = ", ".join(self.style_guide['colors'][:5])
-        
+
         return f"""
         Usa esta paleta de colores específica: {colors_str}
-        
+
         Características de estilo:
         - Mantén consistencia con la línea gráfica existente
         - Usa los colores corporativos mencionados como dominantes
@@ -173,22 +174,22 @@ class SocialMediaImageGenerator:
         try:
             # Leer CSV
             df = pd.read_csv(csv_path)
-            
+
             print(f"\nProcesando calendario: {csv_path}")
             print("="*50)
-            
+
             # Column for universal image that works on all platforms
             df['universal_image'] = ''
-            
+
             # Procesar cada fila
             for idx, row in df.iterrows():
                 print(f"\nPublicación {idx+1}: {row['titulo']}")
-                
+
                 # Generar prompt mejorado
                 base_prompt = f"""Crea una imagen para una publicación en redes sociales con el siguiente contenido:
                 Título: {row['titulo']}
                 Descripción de la imagen: {row['imagen']}
-                
+
                 Requisitos adicionales:
                 - Estilo visual profesional y atractivo
                 - Colores vibrantes pero no saturados
@@ -197,7 +198,7 @@ class SocialMediaImageGenerator:
                 - Alta calidad y detalle
                 - Estilo coherente con la marca CAUSA (sí vas a incluir el logo, solo la mariposa y el 'CAUSA)' debajo de la mariposa, pero no el texto completo de la marca que está en la parte de arriba de la imagen)
                 """
-                
+
                 # Generate single universal image for all platforms
                 print("Generando imagen universal para todas las plataformas...")
                 image_path = self.generate_image(
@@ -208,31 +209,32 @@ class SocialMediaImageGenerator:
                 )
                 df.at[idx, 'universal_image'] = image_path
                 time.sleep(1)  # Reduced wait time since generating only one image
-            
+
             # Guardar CSV actualizado en la carpeta de publicaciones
-            output_csv = Path("publicaciones") / Path(csv_path).name
+            output_csv = path_manager.get_path('publicaciones') / Path(csv_path).name
             df.to_csv(output_csv, index=False)
             print(f"\n✓ CSV actualizado guardado en: {output_csv}")
-            
+
         except Exception as e:
             print(f"\n✗ Error procesando {csv_path}: {str(e)}")
 
 def main():
     # Crear instancia del generador
     generator = SocialMediaImageGenerator()
-    
+
     # Asegurarse que existe el directorio de publicaciones
-    Path("publicaciones").mkdir(exist_ok=True)
-    
+    path_manager.ensure_directories()
+
     # Obtener todos los archivos CSV que coincidan con el patrón
-    csv_files = glob.glob('publicaciones/social_media_calendar_*.csv')
-    
+    publicaciones_dir = path_manager.get_path('publicaciones')
+    csv_files = list(publicaciones_dir.glob('social_media_calendar_*.csv'))
+
     if not csv_files:
         print("No se encontraron archivos CSV para procesar")
         return
 
     print(f"Encontrados {len(csv_files)} archivos CSV para procesar")
-    
+
     # Crear una lista para almacenar todos los DataFrames
     all_dfs = []
 
@@ -262,7 +264,7 @@ def main():
 
     # Guardar el archivo combinado
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = f'publicaciones/social_media_calendar_combined_{timestamp}.csv'
+    output_path = path_manager.get_path('publicaciones') / f'social_media_calendar_combined_{timestamp}.csv'
     combined_df.to_csv(output_path, index=False)
     print(f"\nArchivo combinado guardado en: {output_path}")
 

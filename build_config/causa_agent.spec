@@ -6,22 +6,23 @@ from pathlib import Path
 # Get the source directory
 src_path = Path(__file__).parent.parent / 'src'
 
+# Build datas list and filter out None entries
+datas_list = [
+    # Include all source files
+    (str(src_path / '*.py'), '.'),
+    # Include requirements for reference
+    (str(src_path / 'requirements.txt'), '.'),
+    # Include example environment file (will be placed at root)
+    (str(src_path / '.env.example'), '.'),
+    # Include static assets if any exist
+    (str(src_path / 'static'), 'static') if (src_path / 'static').exists() else None,
+]
+
 a = Analysis(
     [str(src_path / 'launcher.py')],  # Main launcher script
     pathex=[str(src_path)],
     binaries=[],
-    datas=[
-        # Include all source files
-        (str(src_path / '*.py'), '.'),
-        # Include requirements for reference
-        (str(src_path / 'requirements.txt'), '.'),
-        # Include example environment file
-        (str(src_path / '.env.example'), '.'),
-        # Include static assets if any exist
-        (str(src_path / 'static'), 'static') if (src_path / 'static').exists() else None,
-    ],
-    # Remove None entries
-    datas=[item for item in datas if item is not None],
+    datas=[item for item in datas_list if item is not None],
     hiddenimports=[
         'streamlit',
         'streamlit.web.cli',

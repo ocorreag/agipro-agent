@@ -5,25 +5,23 @@ import pandas as pd
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
+from path_manager import path_manager
 
 class PostManager:
-    def __init__(self, base_dir: str = "publicaciones"):
-        if not os.path.isabs(base_dir):
-            base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), base_dir)
-
-        self.base_dir = Path(base_dir)
-        self.drafts_dir = self.base_dir / "drafts"
-        self.published_file = self.base_dir / "published_posts.csv"
-        self.settings_file = self.base_dir / "settings.json"
+    def __init__(self):
+        # Use centralized path management
+        self.base_dir = path_manager.get_path('publicaciones')
+        self.drafts_dir = path_manager.get_path('drafts')
+        self.published_file = path_manager.get_path('published_posts')
+        self.settings_file = path_manager.get_path('settings')
 
         self.setup_directories()
         self.setup_settings()
 
     def setup_directories(self):
         """Create necessary directories"""
-        self.base_dir.mkdir(parents=True, exist_ok=True)
-        self.drafts_dir.mkdir(parents=True, exist_ok=True)
-        (self.base_dir / "imagenes").mkdir(parents=True, exist_ok=True)
+        # Use path manager to ensure directories
+        path_manager.ensure_directories()
 
     def setup_settings(self):
         """Create settings file with defaults"""

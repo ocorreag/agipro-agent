@@ -41,30 +41,12 @@ def wait_for_server(port, timeout=30):
 
 def setup_directories():
     """Create necessary directories if they don't exist"""
-    base_dir = Path.cwd()
+    # Import path_manager here to avoid circular imports
+    from path_manager import setup_environment
 
-    directories = [
-        base_dir / 'publicaciones',
-        base_dir / 'publicaciones' / 'drafts',
-        base_dir / 'publicaciones' / 'imagenes',
-        base_dir / 'memory',
-        base_dir / 'linea_grafica',
-    ]
-
-    for directory in directories:
-        directory.mkdir(parents=True, exist_ok=True)
-
-    # Create .env template if it doesn't exist
-    env_file = base_dir / '.env'
-    env_example = base_dir / '.env.example'
-
-    if not env_file.exists() and env_example.exists():
-        # Copy example to actual .env
-        with open(env_example, 'r') as f:
-            content = f.read()
-        with open(env_file, 'w') as f:
-            f.write(content)
-        print(f"✓ Created .env file from template")
+    # Setup complete environment
+    setup_environment()
+    print(f"✓ Environment setup completed")
 
 def launch_streamlit():
     """Launch Streamlit server"""

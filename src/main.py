@@ -2,6 +2,7 @@ import pandas as pd
 import agent
 import images
 from csv_manager import PostManager
+from path_manager import setup_environment
 
 def cleanup_old_posts(pm: PostManager):
     """
@@ -83,6 +84,9 @@ def display_summary(pm: PostManager):
 def main():
     try:
         print("\n=== Iniciando proceso de generación de contenido ===")
+
+        # Setup environment and paths
+        setup_environment()
 
         # Inicializar gestor de CSV
         pm = PostManager()
