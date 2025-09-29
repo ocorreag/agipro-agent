@@ -143,8 +143,9 @@ class PublicationEditor:
                     self._show_edit_modal(post)
 
                 # Show image if available
-                if 'image_path' in post and post['image_path'] and isinstance(post['image_path'], str):
-                    image_path = post['image_path']
+                image_path = post.get('image_path', '')
+                # Handle both NaN values and empty strings
+                if image_path and str(image_path) != 'nan' and isinstance(image_path, str) and image_path.strip():
                     if os.path.exists(image_path):
                         try:
                             image = Image.open(image_path)

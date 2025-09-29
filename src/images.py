@@ -18,7 +18,7 @@ class SocialMediaImageGenerator:
     def __init__(self):
         self.client = OpenAI()
         # Universal size that works across all social media platforms
-        self.universal_size = "1080x1080"  # 1:1 square format - most versatile
+        self.universal_size = "1024x1024"  # 1:1 square format - most versatile and DALL-E 3 compatible
         self.output_dir = path_manager.get_path('imagenes')
         self.output_dir.mkdir(parents=True, exist_ok=True)
 

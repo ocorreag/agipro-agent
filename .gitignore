@@ -1,4 +1,5 @@
 /_pycache_
+src/__pycache__
 src/publicaciones
 src/memory
 src/linea_grafica

@@ -17,6 +17,7 @@ from config_manager import ConfigManager
 from file_manager import FileManager
 from publication_editor import PublicationEditor
 from csv_manager import PostManager
+from path_manager import setup_environment
 import agent
 import images
 
@@ -857,6 +858,9 @@ class CausaApp:
 
 def main():
     """Main entry point"""
+    # Setup environment and paths
+    setup_environment()
+
     app = CausaApp()
     app.run()
 

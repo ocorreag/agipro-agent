@@ -75,6 +75,9 @@ class PostManager:
         columns = ['fecha', 'titulo', 'imagen', 'descripcion', 'status', 'created_at', 'image_path']
         df = df.reindex(columns=columns, fill_value='')
 
+        # Ensure image_path column is string type from the start
+        df['image_path'] = df['image_path'].astype('str')
+
         df.to_csv(draft_file, index=False, encoding='utf-8')
         print(f"✓ {len(posts)} posts guardados como borradores en: {draft_file}")
 
@@ -97,6 +100,9 @@ class PostManager:
                 df = pd.read_csv(file, encoding='utf-8')
                 # Fill NaN values to avoid TypeError when accessing fields
                 df = df.fillna('')
+                # Ensure image_path column is string type
+                if 'image_path' in df.columns:
+                    df['image_path'] = df['image_path'].astype('str')
                 # Only return drafts, not published
                 drafts = df[df['status'] == 'draft'].to_dict('records')
 
@@ -185,6 +191,8 @@ class PostManager:
 
                 mask = (df['fecha'] == fecha) & (df['titulo'] == titulo)
                 if mask.any():
+                    # Ensure image_path column is string type to avoid dtype warning
+                    df['image_path'] = df['image_path'].astype('str')
                     df.loc[mask, 'image_path'] = image_path
                     df.to_csv(file_path, index=False, encoding='utf-8')
                     print(f"Updated image path for '{titulo}' in {file_path.name}")

@@ -71,7 +71,7 @@ Requirements are managed in `src/requirements.txt`. Key dependencies:
 - **Usage**: Both ContentGenerator and ContentReviewer classes use this configuration
 
 ### Image Generation Configuration
-- **Size**: `1080x1080px` (1:1 square format - universal for all social media)
+- **Size**: `1024x1024px` (1:1 square format - universal for all social media, DALL-E 3 compatible)
 - **Quality**: High
 - **Model**: gpt-image-1 (DALL-E 3)
 - **Format**: Single image per post (replaces separate Instagram/Facebook images)
@@ -261,7 +261,7 @@ if not draft_file.exists():
 The system now generates **single universal images** instead of separate platform-specific images:
 
 #### **Configuration:**
-- **Size**: 1080x1080px (1:1 square format)
+- **Size**: 1024x1024px (1:1 square format)
 - **Quality**: High (DALL-E 3)
 - **Compatibility**: Instagram, Facebook, Twitter, LinkedIn, WhatsApp, Telegram
 

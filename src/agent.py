@@ -21,6 +21,7 @@ from langchain_community.document_loaders import TextLoader, PyPDFLoader
 import json
 from json_parser import parse_posts_from_llm_response
 from config_manager import ConfigManager
+from path_manager import path_manager
 
 load_dotenv()
 
@@ -29,12 +30,8 @@ config_manager = ConfigManager()
 
 def setup_directories():
     """Crea la estructura de directorios necesaria"""
-    directories = [
-        Path("publicaciones"),
-        Path("publicaciones/imagenes"),
-    ]
-    for directory in directories:
-        directory.mkdir(parents=True, exist_ok=True)
+    # Use centralized path management
+    path_manager.ensure_directories()
 
 class ContentPost(TypedDict):
     fecha: str
@@ -145,10 +142,10 @@ def get_activities_from_sheet():
         # URL encode the sheet name to handle spaces and special characters
         encoded_sheet_name = quote(sheet_name)
         url = f'https://docs.google.com/spreadsheets/d/{gsheet_id}/gviz/tq?tqx=out:csv&sheet={encoded_sheet_name}'
-        
+
         print(f"Leyendo actividades desde Google Sheet: {url}")
         all_activities = pd.read_csv(url)
-        
+
         if 'status' in all_activities.columns:
             confirmed_activities = all_activities[all_activities['status'].str.lower() == 'confirmada'].copy()
             print(f"Se encontraron {len(confirmed_activities)} actividades confirmadas.")
@@ -169,12 +166,12 @@ class ContentGenerator:
         self.llm = ChatOpenAI(model="gpt-5-nano", temperature=1, max_tokens=40192, reasoning_effort="medium")
         self.embeddings: Embeddings = OpenAIEmbeddings()
         self.memory_db = self._load_memory()
-        
+
     def _load_memory(self) -> Chroma:
         """Carga los documentos de memoria y crea una base de datos vectorial"""
         documents = []
-        memory_path = Path("memory/")
-        
+        memory_path = path_manager.get_path('memory')
+
         # Función auxiliar para cargar un archivo
         def load_file(file_path: Path):
             try:
@@ -194,10 +191,10 @@ class ContentGenerator:
                 if docs:
                     documents.extend(docs)
                     print(f"Archivo cargado exitosamente: {file_path}")
-        
+
         if not documents:
             raise ValueError("No se encontraron documentos válidos en la carpeta memory/")
-            
+
         print(f"Total de documentos cargados: {len(documents)}")
         return Chroma.from_documents(documents, self.embeddings)
 
@@ -205,11 +202,11 @@ class ContentGenerator:
         context = self.memory_db.similarity_search(
             "temas principales del colectivo", k=3
         )
-        
+
         # Obtener efemérides y noticias
         ephemerides = get_ephemerides(state["current_date"])
         news = get_news_for_date(state["current_date"])
-        
+
         # Get configurable system message
         system_message = config_manager.get_setting('prompts', {}).get('system_message',
             """Eres un experto en comunicación social para el Colectivo Ambiental de Usaca (CAUSA), una organización ambiental y social de Bogotá, Colombia.
@@ -242,21 +239,21 @@ El colectivo se enfoca en: medio ambiente, animalismo, derechos humanos, urbanis
                 EFEMÉRIDES ENCONTRADAS PARA HOY:
                 {ephemerides}
                 ------------------------------------------------------------------------------------------------
-                
+
                 NOTICIAS ENCONTRADAS PARA HOY:
                 {news}
                 ------------------------------------------------------------------------------------------------
 
                 NOTA: Las publicaciones deben ser relevantes para el colectivo y para la fecha actual. Puedes combinar noticias, efemérides y temas del colectivo. O dos publicaciones de noticias y una de efemérides. O dos noticias y una de temas del colectivo si no hay efemérides, o tres noticias si no hay efemérides ni actividades. Se creativo y profesional.
-                
+
                 El contenido debe incluir:
                 - Un título llamativo y relevante para la publicación.(campo titulo)
                 - Una descripción detallada de la imagen que se debe usar. Sé específico y detallado. (campo imagen) Para publicaciones de eventos, anuncios o que requieran texto, la descripción debe incluir instrucciones claras para que el generador de imágenes (DALL-E 3) pueda crear un flyer o una imagen con texto. Por ejemplo: 'Un flyer para un evento con el título "Nombre del Evento", la fecha "DD/MM/YYYY", y el lugar "Lugar del Evento". El estilo debe ser...'. Para otras publicaciones, puedes describir una imagen sin texto. Sé muy específico sobre los elementos visuales y el texto a incluir.
                 - Un texto completo para la publicación que incluya hashtags relevantes (campo descripcion), incluye emojis y buenas prácticas de redacción para redes sociales.
-                
+
                 Contexto del colectivo:
                 {context}
-                
+
                 IMPORTANTE: Responde ÚNICAMENTE en formato JSON válido, sin texto adicional antes o después. Estructura requerida:
                 ```json
                 {{
@@ -282,7 +279,7 @@ El colectivo se enfoca en: medio ambiente, animalismo, derechos humanos, urbanis
                 """
             )
         ])
-        
+
         # Generar contenido
         response = self.llm.invoke(
             prompt.format(
@@ -294,7 +291,7 @@ El colectivo se enfoca en: medio ambiente, animalismo, derechos humanos, urbanis
                 posts_per_day=posts_per_day
             )
         )
-        
+
         content = response.content
         if isinstance(content, list):
             content = "\n".join(str(item) for item in content)
@@ -303,7 +300,7 @@ El colectivo se enfoca en: medio ambiente, animalismo, derechos humanos, urbanis
             "posts": self._parse_response(content),
             "messages": [AIMessage(content=response.content)]
         }
-    
+
     def _parse_response(self, content: str, save_csv: bool = False) -> List[ContentPost]:
         """Parse la respuesta del LLM usando el parser JSON robusto"""
 
@@ -333,7 +330,7 @@ El colectivo se enfoca en: medio ambiente, animalismo, derechos humanos, urbanis
 
             if save_csv:
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                output_file = Path("publicaciones") / f"social_media_calendar_{timestamp}.csv"
+                output_file = path_manager.get_path('publicaciones') / f"social_media_calendar_{timestamp}.csv"
 
                 with open(output_file, 'w', newline='', encoding='utf-8') as f:
                     import csv
@@ -365,7 +362,7 @@ class ContentReviewer:
         self.embeddings: Embeddings = OpenAIEmbeddings()
         self.memory_db = None
         self.content_generator = content_generator
-    
+
     def set_memory_db(self, memory_db: Chroma):
         self.memory_db = memory_db
 
@@ -378,7 +375,7 @@ class ContentReviewer:
         context = self.memory_db.similarity_search(
             "temas principales del colectivo", k=5
         ) if self.memory_db else []
-        
+
         ephemerides = get_ephemerides(state["current_date"])
         news = get_news_for_date(state["current_date"])
 
@@ -456,36 +453,36 @@ def create_content_graph(posts_per_day: int = 3) -> StateGraph:
 
     workflow.add_node("generate_content", generate_with_config)
     workflow.add_node("review", review_with_config)
-    
+
     workflow.set_entry_point("generate_content")
     workflow.add_edge("generate_content", "review")
     workflow.add_edge("review", END)
-    
+
     return workflow
 
 def generate_social_media_calendar(days: int = 7, posts_per_day: int = 3) -> List[ContentPost]:
     graph = create_content_graph(posts_per_day).compile()
     start_date = datetime.now()
     posts = []
-    
+
     for i in range(days):
         current_date = (start_date + timedelta(days=i)).strftime("%Y-%m-%d")
-        
+
         result = graph.invoke({
             "messages": [],
             "posts": [],
             "memory_docs": "",
             "current_date": current_date
         })
-        
+
         if "posts" in result:
             posts.extend(result["posts"])
-    
+
     return posts
 
 if __name__ == "__main__":
     setup_directories()
-    
+
     calendar = generate_social_media_calendar(days=8)
     print("\n=== Calendario de Contenido ===\n")
     for post in calendar:
@@ -494,5 +491,5 @@ if __name__ == "__main__":
         print(f"Imagen: {post['imagen']}")
         print(f"Descripción: {post['descripcion']}")
         print("\n" + "="*50 + "\n")
-    
+
     print("\nPara generar las imágenes, ejecute: python images.py")
