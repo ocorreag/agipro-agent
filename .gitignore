@@ -3,4 +3,5 @@ src/publicaciones
 src/memory
 src/linea_grafica
 .env
+src/.env
 src/src/.env
