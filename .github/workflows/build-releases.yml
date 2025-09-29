@@ -14,7 +14,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
@@ -54,7 +54,7 @@ jobs:
         7z a ../../CAUSA-Agent-Windows.zip CAUSA-Agent.exe
 
     - name: Upload Windows artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: windows-build
         path: |
@@ -68,7 +68,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.11'
 
@@ -99,7 +99,7 @@ jobs:
           "build_config/dist/"
 
     - name: Upload macOS artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: macos-build
         path: |
@@ -113,16 +113,14 @@ jobs:
 
     steps:
     - name: Download all artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
 
     - name: Create Release
       id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ github.ref }}
-        release_name: CAUSA Agent ${{ github.ref }}
+        tag_name: ${{ github.ref_name }}
+        name: CAUSA Agent ${{ github.ref_name }}
         draft: false
         prerelease: false
         body: |
@@ -143,23 +141,6 @@ jobs:
           - Image generation with DALL-E 3
           - Local storage for months of content
           - Cross-platform desktop app
-
-    - name: Upload Windows Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./windows-build/CAUSA-Agent-Windows.zip
-        asset_name: CAUSA-Agent-Windows.zip
-        asset_content_type: application/zip
-
-    - name: Upload macOS Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./macos-build/CAUSA-Agent-macOS.dmg
-        asset_name: CAUSA-Agent-macOS.dmg
-        asset_content_type: application/octet-stream
+        files: |
+          windows-build/CAUSA-Agent-Windows.zip
+          macos-build/CAUSA-Agent-macOS.dmg
