@@ -1,10 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 
 import sys
+import os
 from pathlib import Path
 
-# Get the source directory
-src_path = Path(__file__).parent.parent / 'src'
+# Get the source directory - use SPECPATH which is available in PyInstaller
+spec_root = os.path.dirname(SPECPATH)
+src_path = Path(spec_root) / 'src'
 
 # Build datas list and filter out None entries
 datas_list = [
