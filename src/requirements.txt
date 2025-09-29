@@ -1,0 +1,15 @@
+langchain
+langchain-openai
+langchain-community
+langgraph
+openai
+pandas
+python-dotenv
+pillow
+requests
+chromadb
+sentence-transformers
+pydantic>=2.0
+ddgs
+streamlit
+cryptography

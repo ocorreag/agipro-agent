@@ -1,0 +1,165 @@
+name: Build Cross-Platform Releases
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v1.0.0
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r src/requirements.txt
+        pip install pyinstaller
+
+    - name: Build Windows executable
+      run: |
+        cd build_config
+        pyinstaller causa_agent.spec --clean --noconfirm
+
+    - name: Create Windows installer
+      run: |
+        # Create NSIS installer script
+        echo 'OutFile "CAUSA-Agent-Windows-Installer.exe"' > installer.nsi
+        echo 'InstallDir "$PROGRAMFILES\CAUSA-Agent"' >> installer.nsi
+        echo 'RequestExecutionLevel admin' >> installer.nsi
+        echo '' >> installer.nsi
+        echo 'Section "MainSection" SEC01' >> installer.nsi
+        echo '  SetOutPath "$INSTDIR"' >> installer.nsi
+        echo '  File /r "build_config\dist\CAUSA-Agent.exe"' >> installer.nsi
+        echo '  CreateShortcut "$DESKTOP\CAUSA Agent.lnk" "$INSTDIR\CAUSA-Agent.exe"' >> installer.nsi
+        echo '  CreateShortcut "$SMPROGRAMS\CAUSA Agent.lnk" "$INSTDIR\CAUSA-Agent.exe"' >> installer.nsi
+        echo 'SectionEnd' >> installer.nsi
+        echo '' >> installer.nsi
+        echo 'Section "Uninstall"' >> installer.nsi
+        echo '  Delete "$DESKTOP\CAUSA Agent.lnk"' >> installer.nsi
+        echo '  Delete "$SMPROGRAMS\CAUSA Agent.lnk"' >> installer.nsi
+        echo '  RMDir /r "$INSTDIR"' >> installer.nsi
+        echo 'SectionEnd' >> installer.nsi
+
+        # For now, just package as zip since NSIS requires separate setup
+        cd build_config/dist
+        7z a ../../CAUSA-Agent-Windows.zip CAUSA-Agent.exe
+
+    - name: Upload Windows artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: windows-build
+        path: |
+          CAUSA-Agent-Windows.zip
+          build_config/dist/CAUSA-Agent.exe
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r src/requirements.txt
+        pip install pyinstaller
+
+    - name: Build macOS app
+      run: |
+        cd build_config
+        pyinstaller causa_agent.spec --clean --noconfirm
+
+    - name: Create DMG installer
+      run: |
+        # Install create-dmg
+        brew install create-dmg
+
+        # Create DMG
+        create-dmg \
+          --volname "CAUSA Agent" \
+          --window-pos 200 120 \
+          --window-size 600 300 \
+          --icon-size 100 \
+          --app-drop-link 425 120 \
+          "CAUSA-Agent-macOS.dmg" \
+          "build_config/dist/"
+
+    - name: Upload macOS artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: macos-build
+        path: |
+          CAUSA-Agent-macOS.dmg
+          build_config/dist/CAUSA-Agent.app
+
+  create-release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: CAUSA Agent ${{ github.ref }}
+        draft: false
+        prerelease: false
+        body: |
+          ## CAUSA Social Media Agent Release
+
+          ### Downloads:
+          - **Windows**: Download `CAUSA-Agent-Windows.zip`, extract and run `CAUSA-Agent.exe`
+          - **macOS**: Download `CAUSA-Agent-macOS.dmg`, mount and drag to Applications
+
+          ### First Time Setup:
+          1. Run the application
+          2. Go to Configuration tab
+          3. Enter your OpenAI API key
+          4. Configure other settings as needed
+
+          ### What's New:
+          - Social media content generation with AI
+          - Image generation with DALL-E 3
+          - Local storage for months of content
+          - Cross-platform desktop app
+
+    - name: Upload Windows Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./windows-build/CAUSA-Agent-Windows.zip
+        asset_name: CAUSA-Agent-Windows.zip
+        asset_content_type: application/zip
+
+    - name: Upload macOS Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./macos-build/CAUSA-Agent-macOS.dmg
+        asset_name: CAUSA-Agent-macOS.dmg
+        asset_content_type: application/octet-stream
