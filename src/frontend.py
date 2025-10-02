@@ -176,7 +176,7 @@ def main():
 
     # Configuration
     elif page == "⚙️ Configuración":
-        show_configuration(config)
+        show_configuration(config, pm)
 
     # File Management
     elif page == "📁 Archivos":
@@ -266,7 +266,7 @@ def show_dashboard(pm, config):
         with col2:
             st.write(status)
 
-def show_configuration(config):
+def show_configuration(config, pm):
     """Show configuration management interface"""
     st.header("⚙️ Configuración del Sistema")
 
