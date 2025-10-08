@@ -96,6 +96,18 @@ class PathManager:
 
     def setup_env_file(self):
         """Setup .env file from example if it doesn't exist"""
+        # Import locally to avoid circular dependency
+        try:
+            from safe_print import safe_print
+        except ImportError:
+            # Fallback to regular print if safe_print not available
+            def safe_print(*args, **kwargs):
+                try:
+                    if sys.stdout:
+                        print(*args, **kwargs)
+                except:
+                    pass
+
         env_file = self.get_path('env_file')
         env_example = self.get_path('env_example')
 
@@ -105,31 +117,43 @@ class PathManager:
                     content = f.read()
                 with open(env_file, 'w', encoding='utf-8') as f:
                     f.write(content)
-                print(f"✓ Created .env file from template at: {env_file}")
+                safe_print(f"✓ Created .env file from template at: {env_file}")
                 return True
             except Exception as e:
-                print(f"⚠️ Could not create .env file: {e}")
+                safe_print(f"⚠️ Could not create .env file: {e}")
                 return False
         return env_file.exists()
 
     def print_debug_info(self):
         """Print debugging information about paths"""
-        print("=" * 60)
-        print("🔧 CAUSA Agent - Path Manager Debug Info")
-        print("=" * 60)
-        print(f"Execution Mode: {self._execution_mode}")
-        print(f"Base Directory: {self._base_dir}")
-        print(f"Base Dir Exists: {self._base_dir.exists()}")
+        # Import locally to avoid circular dependency
+        try:
+            from safe_print import safe_print
+        except ImportError:
+            # Fallback to regular print if safe_print not available
+            def safe_print(*args, **kwargs):
+                try:
+                    if sys.stdout:
+                        print(*args, **kwargs)
+                except:
+                    pass
+
+        safe_print("=" * 60)
+        safe_print("🔧 CAUSA Agent - Path Manager Debug Info")
+        safe_print("=" * 60)
+        safe_print(f"Execution Mode: {self._execution_mode}")
+        safe_print(f"Base Directory: {self._base_dir}")
+        safe_print(f"Base Dir Exists: {self._base_dir.exists()}")
 
         if self._execution_mode == "bundle":
-            print(f"Executable Path: {sys.executable}")
-            print(f"_MEIPASS: {getattr(sys, '_MEIPASS', 'Not available')}")
+            safe_print(f"Executable Path: {sys.executable}")
+            safe_print(f"_MEIPASS: {getattr(sys, '_MEIPASS', 'Not available')}")
 
-        print("\nPath Configuration:")
+        safe_print("\nPath Configuration:")
         for key, path in self._paths.items():
             exists = "✓" if path.exists() else "✗"
-            print(f"  {key:15} {exists} {path}")
-        print("=" * 60)
+            safe_print(f"  {key:15} {exists} {path}")
+        safe_print("=" * 60)
 
 # Global instance
 path_manager = PathManager()

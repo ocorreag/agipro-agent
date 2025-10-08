@@ -11,10 +11,15 @@ from typing import Dict, Any, Optional
 import base64
 from cryptography.fernet import Fernet
 import hashlib
+from path_manager import path_manager
 
 class ConfigManager:
     def __init__(self):
-        self.config_dir = Path("src/publicaciones")
+        # Use path_manager for consistent path handling
+        publicaciones_dir = path_manager.get_path('publicaciones')
+
+        # Create config subdirectory within publicaciones
+        self.config_dir = publicaciones_dir
         self.config_file = self.config_dir / "app_config.json"
         self.secrets_file = self.config_dir / "secrets.enc"
         self.config_dir.mkdir(parents=True, exist_ok=True)
@@ -115,12 +120,13 @@ El colectivo se enfoca en: medio ambiente, animalismo, derechos humanos, urbanis
 
     def update_env_file(self, api_keys: Dict[str, str]):
         """Update the .env file with API keys"""
-        env_path = Path("src/.env")
+        # Use path_manager to get the correct .env path
+        env_path = path_manager.get_path('env_file')
 
         # Read existing .env content
         existing_vars = {}
         if env_path.exists():
-            with open(env_path, 'r') as f:
+            with open(env_path, 'r', encoding='utf-8') as f:
                 for line in f:
                     if '=' in line and not line.startswith('#'):
                         key, value = line.strip().split('=', 1)
@@ -131,7 +137,7 @@ El colectivo se enfoca en: medio ambiente, animalismo, derechos humanos, urbanis
 
         # Write back to .env
         try:
-            with open(env_path, 'w') as f:
+            with open(env_path, 'w', encoding='utf-8') as f:
                 for key, value in existing_vars.items():
                     f.write(f"{key}={value}\n")
             return True

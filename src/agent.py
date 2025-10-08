@@ -22,6 +22,7 @@ import json
 from json_parser import parse_posts_from_llm_response
 from config_manager import ConfigManager
 from path_manager import path_manager
+from safe_print import safe_print
 
 load_dotenv()
 
@@ -70,7 +71,7 @@ def get_news_for_date(date: str) -> str:
 
         query = f"noticias del {search_date.day} de {month_name} de {search_date.year} en Colombia sobre {temas_colectivo}"
 
-        print(f"Buscando noticias con la consulta: {query}")
+        safe_print(f"Buscando noticias con la consulta: {query}")
 
         with DDGS() as ddgs:
             results = list(ddgs.news(query, max_results=7, region="co-es", safesearch="moderate"))
@@ -78,7 +79,7 @@ def get_news_for_date(date: str) -> str:
         if not results:
             # Fallback search without specific date
             fallback_query = f"Colombia {temas_colectivo} noticias recientes"
-            print(f"Sin resultados específicos, probando consulta alternativa: {fallback_query}")
+            safe_print(f"Sin resultados específicos, probando consulta alternativa: {fallback_query}")
             with DDGS() as ddgs:
                 results = list(ddgs.news(fallback_query, max_results=5, region="co-es"))
 
@@ -92,7 +93,7 @@ def get_news_for_date(date: str) -> str:
 
         return formatted_results
     except Exception as e:
-        print(f"Error buscando noticias: {str(e)}")
+        safe_print(f"Error buscando noticias: {str(e)}")
         return "Error al buscar noticias."
 
 def get_ephemerides(date: str) -> str:
@@ -107,7 +108,7 @@ def get_ephemerides(date: str) -> str:
 
         query = f"efemérides del {date_obj.day} de {month_name} en Colombia relacionadas con {temas_colectivo}"
 
-        print(f"Buscando efemérides con la consulta: {query}")
+        safe_print(f"Buscando efemérides con la consulta: {query}")
 
         with DDGS() as ddgs:
             # Use text search for ephemerides as they're more historical
@@ -116,7 +117,7 @@ def get_ephemerides(date: str) -> str:
         if not results:
             # Fallback search with more general terms
             fallback_query = f"{date_obj.day} {month_name} efemérides Colombia historia"
-            print(f"Sin resultados específicos, probando consulta alternativa: {fallback_query}")
+            safe_print(f"Sin resultados específicos, probando consulta alternativa: {fallback_query}")
             with DDGS() as ddgs:
                 results = list(ddgs.text(fallback_query, max_results=5, region="co-es"))
 
@@ -130,7 +131,7 @@ def get_ephemerides(date: str) -> str:
 
         return formatted_results
     except Exception as e:
-        print(f"Error buscando efemérides: {str(e)}")
+        safe_print(f"Error buscando efemérides: {str(e)}")
         return "Error al buscar efemérides."
 
 def get_activities_from_sheet():
@@ -143,19 +144,19 @@ def get_activities_from_sheet():
         encoded_sheet_name = quote(sheet_name)
         url = f'https://docs.google.com/spreadsheets/d/{gsheet_id}/gviz/tq?tqx=out:csv&sheet={encoded_sheet_name}'
 
-        print(f"Leyendo actividades desde Google Sheet: {url}")
+        safe_print(f"Leyendo actividades desde Google Sheet: {url}")
         all_activities = pd.read_csv(url)
 
         if 'status' in all_activities.columns:
             confirmed_activities = all_activities[all_activities['status'].str.lower() == 'confirmada'].copy()
-            print(f"Se encontraron {len(confirmed_activities)} actividades confirmadas.")
+            safe_print(f"Se encontraron {len(confirmed_activities)} actividades confirmadas.")
             return confirmed_activities
         else:
-            print("La columna 'status' no se encontró. Devolviendo todas las actividades.")
+            safe_print("La columna 'status' no se encontró. Devolviendo todas las actividades.")
             return all_activities
 
     except Exception as e:
-        print(f"Error al leer actividades desde Google Sheets: {str(e)}")
+        safe_print(f"Error al leer actividades desde Google Sheets: {str(e)}")
         return pd.DataFrame()
 
 activities = get_activities_from_sheet()
@@ -181,7 +182,7 @@ class ContentGenerator:
                     loader = TextLoader(str(file_path))
                 return loader.load()
             except Exception as e:
-                print(f"Error al cargar {file_path}: {str(e)}")
+                safe_print(f"Error al cargar {file_path}: {str(e)}")
                 return []
 
         # Cargar todos los archivos soportados
@@ -190,12 +191,12 @@ class ContentGenerator:
                 docs = load_file(file_path)
                 if docs:
                     documents.extend(docs)
-                    print(f"Archivo cargado exitosamente: {file_path}")
+                    safe_print(f"Archivo cargado exitosamente: {file_path}")
 
         if not documents:
             raise ValueError("No se encontraron documentos válidos en la carpeta memory/")
 
-        print(f"Total de documentos cargados: {len(documents)}")
+        safe_print(f"Total de documentos cargados: {len(documents)}")
         return Chroma.from_documents(documents, self.embeddings)
 
     def generate_content_plan(self, state: State, posts_per_day: int = 3) -> dict:
@@ -304,9 +305,9 @@ El colectivo se enfoca en: medio ambiente, animalismo, derechos humanos, urbanis
     def _parse_response(self, content: str, save_csv: bool = False) -> List[ContentPost]:
         """Parse la respuesta del LLM usando el parser JSON robusto"""
 
-        print("\n=== Respuesta del LLM ===")
-        print(content)
-        print("\n=== Procesando con parser JSON ===")
+        safe_print("\n=== Respuesta del LLM ===")
+        safe_print(content)
+        safe_print("\n=== Procesando con parser JSON ===")
 
         try:
             # Use the robust JSON parser
@@ -326,7 +327,7 @@ El colectivo se enfoca en: medio ambiente, animalismo, derechos humanos, urbanis
                 )
                 posts.append(post)
 
-            print(f"✅ Se procesaron {len(posts)} posts exitosamente")
+            safe_print(f"✅ Se procesaron {len(posts)} posts exitosamente")
 
             if save_csv:
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -343,16 +344,16 @@ El colectivo se enfoca en: medio ambiente, animalismo, derechos humanos, urbanis
                             post['imagen'],
                             post['descripcion']
                         ])
-                print(f"✅ Calendario guardado en: {output_file}")
+                safe_print(f"✅ Calendario guardado en: {output_file}")
 
             return posts
 
         except Exception as e:
-            print(f"❌ Error al procesar respuesta: {e}")
-            print(f"Tipo de error: {type(e).__name__}")
-            print(f"Contenido problemático (primeros 500 chars):\n{content[:500]}")
+            safe_print(f"❌ Error al procesar respuesta: {e}")
+            safe_print(f"Tipo de error: {type(e).__name__}")
+            safe_print(f"Contenido problemático (primeros 500 chars):\n{content[:500]}")
             if len(content) > 500:
-                print(f"...contenido truncado ({len(content)} chars total)")
+                safe_print(f"...contenido truncado ({len(content)} chars total)")
             raise ValueError(f"Error al procesar la respuesta: {str(e)}")
 
 class ContentReviewer:
@@ -484,12 +485,12 @@ if __name__ == "__main__":
     setup_directories()
 
     calendar = generate_social_media_calendar(days=8)
-    print("\n=== Calendario de Contenido ===\n")
+    safe_print("\n=== Calendario de Contenido ===\n")
     for post in calendar:
-        print(f"Fecha: {post['fecha']}")
-        print(f"Título: {post['titulo']}")
-        print(f"Imagen: {post['imagen']}")
-        print(f"Descripción: {post['descripcion']}")
-        print("\n" + "="*50 + "\n")
+        safe_print(f"Fecha: {post['fecha']}")
+        safe_print(f"Título: {post['titulo']}")
+        safe_print(f"Imagen: {post['imagen']}")
+        safe_print(f"Descripción: {post['descripcion']}")
+        safe_print("\n" + "="*50 + "\n")
 
-    print("\nPara generar las imágenes, ejecute: python images.py")
+    safe_print("\nPara generar las imágenes, ejecute: python images.py")

@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 from path_manager import path_manager
+from safe_print import safe_print
 
 class PostManager:
     def __init__(self):
@@ -79,7 +80,7 @@ class PostManager:
         df['image_path'] = df['image_path'].astype('str')
 
         df.to_csv(draft_file, index=False, encoding='utf-8')
-        print(f"✓ {len(posts)} posts guardados como borradores en: {draft_file}")
+        safe_print(f"✓ {len(posts)} posts guardados como borradores en: {draft_file}")
 
         return str(draft_file)
 
@@ -112,7 +113,7 @@ class PostManager:
 
                 all_drafts.extend(drafts)
             except Exception as e:
-                print(f"Error leyendo {file}: {e}")
+                safe_print(f"Error leyendo {file}: {e}")
 
         return all_drafts
 
@@ -143,7 +144,7 @@ class PostManager:
             return True
 
         except Exception as e:
-            print(f"Error actualizando post: {e}")
+            safe_print(f"Error actualizando post: {e}")
             return False
 
     def update_post_content(self, fecha: str, titulo_original: str, nuevo_titulo: str, nueva_descripcion: str, nueva_imagen: str = None):
@@ -171,7 +172,7 @@ class PostManager:
             return True
 
         except Exception as e:
-            print(f"Error actualizando contenido: {e}")
+            safe_print(f"Error actualizando contenido: {e}")
             return False
 
     def update_image_path(self, fecha: str, titulo: str, image_path: str):
@@ -195,14 +196,14 @@ class PostManager:
                     df['image_path'] = df['image_path'].astype('str')
                     df.loc[mask, 'image_path'] = image_path
                     df.to_csv(file_path, index=False, encoding='utf-8')
-                    print(f"Updated image path for '{titulo}' in {file_path.name}")
+                    safe_print(f"Updated image path for '{titulo}' in {file_path.name}")
                     return True
 
             except Exception as e:
-                print(f"Error reading {file_path}: {e}")
+                safe_print(f"Error reading {file_path}: {e}")
                 continue
 
-        print(f"Post not found: {fecha} - {titulo}")
+        safe_print(f"Post not found: {fecha} - {titulo}")
         return False
 
     def _add_to_published(self, post_data):
@@ -273,7 +274,7 @@ class PostManager:
                 # Skip files with invalid date format
                 continue
 
-        print(f"✓ Limpieza completada: {cleaned_files} archivos y {cleaned_images} imágenes eliminados")
+        safe_print(f"✓ Limpieza completada: {cleaned_files} archivos y {cleaned_images} imágenes eliminados")
         return cleaned_files, cleaned_images
 
     def export_for_image_generation(self, date: str = None) -> str:

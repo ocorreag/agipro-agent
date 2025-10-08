@@ -11,6 +11,7 @@ import time
 from dotenv import load_dotenv
 import glob
 from path_manager import path_manager
+from safe_print import safe_print
 
 load_dotenv()
 
@@ -34,7 +35,7 @@ class SocialMediaImageGenerator:
 
         style_dir = path_manager.get_path('linea_grafica')
         if not style_dir.exists():
-            print("⚠️ Carpeta linea_grafica no encontrada")
+            safe_print("⚠️ Carpeta linea_grafica no encontrada")
             return style_info
 
         try:
@@ -45,11 +46,11 @@ class SocialMediaImageGenerator:
                 image_files.extend(style_dir.glob(pattern))
 
             if not image_files:
-                print("⚠️ No se encontraron imágenes en la carpeta linea_grafica")
+                safe_print("⚠️ No se encontraron imágenes en la carpeta linea_grafica")
                 return style_info
 
             for img_path in image_files:
-                print(f"Analizando imagen: {img_path.name}")
+                safe_print(f"Analizando imagen: {img_path.name}")
                 img = Image.open(img_path)
 
                 # Extraer colores dominantes
@@ -60,11 +61,11 @@ class SocialMediaImageGenerator:
                 composition = self._analyze_composition(img)
                 style_info['compositions'].append(composition)
 
-            print(f"✓ Analizadas {len(style_info['compositions'])} imágenes de línea gráfica")
-            print(f"Colores dominantes encontrados: {', '.join(style_info['colors'][:5])}")
+            safe_print(f"✓ Analizadas {len(style_info['compositions'])} imágenes de línea gráfica")
+            safe_print(f"Colores dominantes encontrados: {', '.join(style_info['colors'][:5])}")
 
         except Exception as e:
-            print(f"✗ Error analizando línea gráfica: {str(e)}")
+            safe_print(f"✗ Error analizando línea gráfica: {str(e)}")
 
         return style_info
 
@@ -130,7 +131,7 @@ class SocialMediaImageGenerator:
             image_b64 = response.data[0].b64_json
 
             if not image_b64:
-                print(f"✗ Error: No se recibió data de la imagen para {platform}.")
+                safe_print(f"✗ Error: No se recibió data de la imagen para {platform}.")
                 return ""
 
             # Decodificar y guardar imagen
@@ -142,12 +143,12 @@ class SocialMediaImageGenerator:
             filepath = self.output_dir / filename
 
             img.save(filepath)
-            print(f"✓ Imagen guardada: {filename}")
+            safe_print(f"✓ Imagen guardada: {filename}")
 
             return str(filepath)
 
         except Exception as e:
-            print(f"✗ Error generando imagen para {platform}: {str(e)}")
+            safe_print(f"✗ Error generando imagen para {platform}: {str(e)}")
             return ""
 
     def _create_style_prompt(self):
@@ -175,15 +176,15 @@ class SocialMediaImageGenerator:
             # Leer CSV
             df = pd.read_csv(csv_path)
 
-            print(f"\nProcesando calendario: {csv_path}")
-            print("="*50)
+            safe_print(f"\nProcesando calendario: {csv_path}")
+            safe_print("="*50)
 
             # Column for universal image that works on all platforms
             df['universal_image'] = ''
 
             # Procesar cada fila
             for idx, row in df.iterrows():
-                print(f"\nPublicación {idx+1}: {row['titulo']}")
+                safe_print(f"\nPublicación {idx+1}: {row['titulo']}")
 
                 # Generar prompt mejorado
                 base_prompt = f"""Crea una imagen para una publicación en redes sociales con el siguiente contenido:
@@ -200,7 +201,7 @@ class SocialMediaImageGenerator:
                 """
 
                 # Generate single universal image for all platforms
-                print("Generando imagen universal para todas las plataformas...")
+                safe_print("Generando imagen universal para todas las plataformas...")
                 image_path = self.generate_image(
                     base_prompt,
                     'universal',  # Single platform identifier
@@ -213,10 +214,10 @@ class SocialMediaImageGenerator:
             # Guardar CSV actualizado en la carpeta de publicaciones
             output_csv = path_manager.get_path('publicaciones') / Path(csv_path).name
             df.to_csv(output_csv, index=False)
-            print(f"\n✓ CSV actualizado guardado en: {output_csv}")
+            safe_print(f"\n✓ CSV actualizado guardado en: {output_csv}")
 
         except Exception as e:
-            print(f"\n✗ Error procesando {csv_path}: {str(e)}")
+            safe_print(f"\n✗ Error procesando {csv_path}: {str(e)}")
 
 def main():
     # Crear instancia del generador
@@ -230,10 +231,10 @@ def main():
     csv_files = list(publicaciones_dir.glob('social_media_calendar_*.csv'))
 
     if not csv_files:
-        print("No se encontraron archivos CSV para procesar")
+        safe_print("No se encontraron archivos CSV para procesar")
         return
 
-    print(f"Encontrados {len(csv_files)} archivos CSV para procesar")
+    safe_print(f"Encontrados {len(csv_files)} archivos CSV para procesar")
 
     # Crear una lista para almacenar todos los DataFrames
     all_dfs = []
@@ -243,12 +244,12 @@ def main():
         try:
             df = pd.read_csv(csv_file)
             all_dfs.append(df)
-            print(f"Leído archivo: {csv_file}")
+            safe_print(f"Leído archivo: {csv_file}")
         except Exception as e:
-            print(f"Error al leer {csv_file}: {str(e)}")
+            safe_print(f"Error al leer {csv_file}: {str(e)}")
 
     if not all_dfs:
-        print("No se pudieron leer archivos CSV válidos")
+        safe_print("No se pudieron leer archivos CSV válidos")
         return
 
     # Concatenar todos los DataFrames en uno solo
@@ -266,14 +267,14 @@ def main():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = path_manager.get_path('publicaciones') / f'social_media_calendar_combined_{timestamp}.csv'
     combined_df.to_csv(output_path, index=False)
-    print(f"\nArchivo combinado guardado en: {output_path}")
+    safe_print(f"\nArchivo combinado guardado en: {output_path}")
 
     # Procesar el archivo combinado
     try:
         generator.process_calendar(output_path)
-        print("\n✓ Procesamiento completado exitosamente")
+        safe_print("\n✓ Procesamiento completado exitosamente")
     except Exception as e:
-        print(f"\n✗ Error durante el procesamiento: {str(e)}")
+        safe_print(f"\n✗ Error durante el procesamiento: {str(e)}")
 
 if __name__ == "__main__":
     main()

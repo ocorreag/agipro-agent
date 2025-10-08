@@ -18,8 +18,18 @@ import requests
 # Fix Windows console encoding for emoji support
 if sys.platform == 'win32':
     import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    # Check if stdout/stderr exist (they're None in GUI mode on Windows)
+    if sys.stdout is not None and hasattr(sys.stdout, 'buffer'):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    elif sys.stdout is None:
+        # Open devnull as stdout in GUI mode to prevent errors
+        sys.stdout = open(os.devnull, 'w', encoding='utf-8')
+
+    if sys.stderr is not None and hasattr(sys.stderr, 'buffer'):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    elif sys.stderr is None:
+        # Open devnull as stderr in GUI mode to prevent errors
+        sys.stderr = open(os.devnull, 'w', encoding='utf-8')
 
 def find_free_port(start_port=8501):
     """Find a free port starting from start_port"""
