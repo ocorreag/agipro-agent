@@ -12,8 +12,9 @@ import subprocess
 import threading
 import signal
 import socket
-from pathlib import Path
 import requests
+
+from path_manager import path_manager, setup_environment
 
 # Fix Windows console encoding for emoji support
 if sys.platform == 'win32':
@@ -57,10 +58,6 @@ def wait_for_server(port, timeout=30):
 
 def setup_directories():
     """Create necessary directories if they don't exist"""
-    # Import path_manager here to avoid circular imports
-    from path_manager import setup_environment
-
-    # Setup complete environment
     setup_environment()
     print(f"✓ Environment setup completed")
 
@@ -80,17 +77,23 @@ def launch_streamlit():
     env['STREAMLIT_BROWSER_GATHER_USAGE_STATS'] = 'false'
     env['STREAMLIT_SERVER_ENABLE_CORS'] = 'false'
     env['STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION'] = 'false'
+    env['STREAMLIT_SERVER_FILE_WATCHER_TYPE'] = 'none'
+
+    src_dir = path_manager.get_path('src')
+    app_path = src_dir / 'app.py'
+    working_dir = path_manager.get_base_dir()
+    cwd = str(working_dir) if working_dir else None
 
     # Launch Streamlit
     try:
         process = subprocess.Popen([
-            sys.executable, '-m', 'streamlit', 'run', 'app.py',
+            sys.executable, '-m', 'streamlit', 'run', str(app_path),
             '--server.port', str(port),
             '--server.headless', 'true',
             '--browser.gatherUsageStats', 'false',
             '--server.enableCORS', 'false',
             '--server.enableXsrfProtection', 'false'
-        ], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        ], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
 
         return process, port
     except Exception as e:
@@ -129,10 +132,6 @@ def main():
 
     # Setup directories
     setup_directories()
-
-    # Change to src directory where app.py is located
-    src_dir = Path(__file__).parent
-    os.chdir(src_dir)
 
     # Launch Streamlit
     process, port = launch_streamlit()

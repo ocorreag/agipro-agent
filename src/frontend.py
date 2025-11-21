@@ -13,6 +13,7 @@ from io import BytesIO
 from csv_manager import PostManager
 import agent
 import images
+from path_manager import path_manager
 
 # Configure Streamlit page
 st.set_page_config(
@@ -82,7 +83,7 @@ class StreamlitConfig:
     """Configuration manager for the Streamlit app"""
 
     def __init__(self):
-        self.config_file = Path("streamlit_config.json")
+        self.config_file = path_manager.get_base_dir() / "streamlit_config.json"
         self.load_config()
 
     def load_config(self):
@@ -222,7 +223,8 @@ def show_dashboard(pm, config):
         )
 
     with col4:
-        memory_files = len(list(Path("memory").glob("*.pdf"))) + len(list(Path("memory").glob("*.txt")))
+        memory_dir = path_manager.get_path('memory')
+        memory_files = len(list(memory_dir.glob("*.pdf"))) + len(list(memory_dir.glob("*.txt")))
         st.metric(
             label="🧠 Archivos Memoria",
             value=memory_files,
@@ -410,7 +412,7 @@ def show_file_management():
         st.subheader("Archivos para RAG (Memoria Organizacional)")
         st.markdown("*Sube documentos PDF y TXT que contengan información sobre tu organización*")
 
-        memory_dir = Path("memory")
+        memory_dir = path_manager.get_path('memory')
         memory_dir.mkdir(exist_ok=True)
 
         # Upload new files
@@ -460,7 +462,7 @@ def show_file_management():
         st.subheader("Imágenes de Línea Gráfica")
         st.markdown("*Sube imágenes que representen el estilo visual de tu organización*")
 
-        graphics_dir = Path("linea_grafica")
+        graphics_dir = path_manager.get_path('linea_grafica')
         graphics_dir.mkdir(exist_ok=True)
 
         # Upload new images
