@@ -6,7 +6,7 @@ import pandas as pd
 from langchain_openai import ChatOpenAI
 from urllib.parse import quote
 
-from ddgs import DDGS
+from duckduckgo_search import DDGS
 from langchain_core.messages import SystemMessage, AIMessage, BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
