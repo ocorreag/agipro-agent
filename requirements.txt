@@ -1,6 +1,4 @@
-# CAUSA Agent - Cloud Requirements (Minimal)
-# Optimized for fast Railway deployment
-
+# CAUSA Agent - Minimal for Railway
 streamlit==1.28.0
 langchain==0.1.0
 langgraph==0.0.20
