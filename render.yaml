@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: causa-agent
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: cd src && streamlit run app.py --server.port=$PORT --server.address=0.0.0.0
+    envVars:
+      - key: CAUSA_MODE
+        value: hybrid
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: OPENAI_API_KEY
+        sync: false  # You'll set this manually in the dashboard
