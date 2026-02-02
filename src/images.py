@@ -219,6 +219,133 @@ class SocialMediaImageGenerator:
         except Exception as e:
             safe_print(f"\n✗ Error procesando {csv_path}: {str(e)}")
 
+# ============================================================================
+# Standalone Functions for Tool Use
+# ============================================================================
+
+def generate_single_image(
+    titulo: str,
+    imagen_description: str,
+    fecha: str,
+    style_colors: list = None
+) -> str:
+    """
+    Generate a single image using DALL-E 3.
+
+    This is a standalone function that can be used by tools or other modules
+    without instantiating the full SocialMediaImageGenerator class.
+
+    Args:
+        titulo: The post title (used for filename and context)
+        imagen_description: Detailed description for the image
+        fecha: The post date in YYYY-MM-DD format (used for filename)
+        style_colors: Optional list of hex colors for brand consistency
+
+    Returns:
+        Path to the saved image file, or empty string on error
+    """
+    try:
+        client = OpenAI()
+        output_dir = path_manager.get_path('imagenes')
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Build style prompt if colors provided
+        style_prompt = ""
+        if style_colors:
+            colors_str = ", ".join(style_colors[:5])
+            style_prompt = f"""
+            Use this specific color palette: {colors_str}
+
+            Style characteristics:
+            - Maintain consistency with existing brand identity
+            - Use the corporate colors as dominant tones
+            - Apply a clean, minimalist style
+            - Keep balanced negative space
+            - Use simple geometric shapes where appropriate
+            - Avoid excessive decorative elements
+            """
+        else:
+            # Try to analyze brand images for colors
+            style_dir = path_manager.get_path('linea_grafica')
+            if style_dir.exists():
+                try:
+                    image_files = []
+                    for pattern in ['*.jpg', '*.jpeg', '*.png']:
+                        image_files.extend(style_dir.glob(pattern))
+
+                    if image_files:
+                        colors = []
+                        for img_path in image_files[:3]:
+                            img = Image.open(img_path)
+                            if img.mode != 'RGB':
+                                img = img.convert('RGB')
+                            img.thumbnail((150, 150))
+                            pixels = list(img.getdata())
+                            color_counts = {}
+                            for pixel in pixels:
+                                if pixel in color_counts:
+                                    color_counts[pixel] += 1
+                                else:
+                                    color_counts[pixel] = 1
+                            dominant = sorted(color_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+                            colors.extend(['#{:02x}{:02x}{:02x}'.format(c[0][0], c[0][1], c[0][2]) for c in dominant])
+
+                        if colors:
+                            colors_str = ", ".join(colors[:5])
+                            style_prompt = f"\nUse this brand color palette where appropriate: {colors_str}"
+                except Exception:
+                    pass  # Silent fail on style analysis
+
+        # Build enhanced prompt
+        enhanced_prompt = f"""Create a social media image for the following post:
+
+Title: {titulo}
+Image description: {imagen_description}
+
+Additional requirements:
+- Professional and attractive visual style
+- Vibrant but not oversaturated colors
+- Balanced composition
+- If text is requested, render it clearly and legibly
+- High quality and detail
+- Style coherent with the CAUSA brand (if including logo, only the butterfly and 'CAUSA' below it)
+{style_prompt}
+"""
+
+        # Generate image
+        response = client.images.generate(
+            model="gpt-image-1",
+            prompt=enhanced_prompt,
+            size="1024x1024",  # Universal square format
+            quality="high",
+            n=1
+        )
+
+        image_b64 = response.data[0].b64_json
+
+        if not image_b64:
+            safe_print("Error: No image data received from DALL-E")
+            return ""
+
+        # Decode and save image
+        image_bytes = base64.b64decode(image_b64)
+        img = Image.open(BytesIO(image_bytes))
+
+        # Create safe filename
+        safe_title = "".join(c for c in titulo if c.isalnum() or c in (' ', '-', '_')).rstrip()
+        filename = f"{fecha}_{safe_title[:50]}.png"
+        filepath = output_dir / filename
+
+        img.save(filepath)
+        safe_print(f"Image saved: {filename}")
+
+        return str(filepath)
+
+    except Exception as e:
+        safe_print(f"Error generating image: {str(e)}")
+        return ""
+
+
 def main():
     # Crear instancia del generador
     generator = SocialMediaImageGenerator()

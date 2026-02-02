@@ -103,16 +103,94 @@ The system generates 3 types of posts per day:
 
 Content must align with the collective's focus areas: environmentalism, animal rights, human rights, popular education, culture, and memory preservation.
 
+## Conversational Agent System (New Architecture)
+
+The system now features a **conversational AI agent** that replaces the rigid batch-generation workflow with a flexible, tool-based approach inspired by [Deep Agents](https://github.com/langchain-ai/deepagents).
+
+### Agent Architecture
+
+```
+User Chat → CAUSA Agent → Tools → Response
+                ↓
+        [search_web]
+        [search_ephemerides]
+        [query_collective_memory]
+        [get_activities]
+        [read_past_publications]
+        [save_draft_post]
+        [generate_image]
+```
+
+### Core Agent Components
+
+- **`causa_agent.py`**: Main LangGraph ReAct agent with conversation support
+- **`chat_interface.py`**: Streamlit chat UI for conversational interaction
+- **`tools/`**: Package containing all agent tools
+  - `web_search.py`: Flexible web search (DuckDuckGo)
+  - `publications.py`: Read history, save drafts, get activities
+  - `memory.py`: RAG search on collective documents
+  - `images.py`: DALL-E 3 image generation
+
+### Agent Features
+
+1. **Flexible Content Creation**: Create 1 post or many, based on conversation
+2. **History Awareness**: Reads past publications to avoid repetition
+3. **Dynamic Research**: Agent decides what to search and when
+4. **Human-in-the-Loop**: Images generated only after user approval
+5. **Conversation Memory**: Maintains context across multi-turn conversations
+
+### Running the Agent
+
+```bash
+# Chat mode via Streamlit UI
+streamlit run app.py
+# Navigate to "Chat con Agente" in sidebar
+
+# CLI mode for testing
+python src/causa_agent.py
+
+# Direct Python usage
+from causa_agent import create_causa_agent, chat
+agent = create_causa_agent()
+response = chat(agent, "Create a post about climate action")
+```
+
+### Agent Tools Reference
+
+| Tool | Purpose | Parameters |
+|------|---------|------------|
+| `search_web` | Flexible web search | query, search_type, max_results |
+| `search_ephemerides` | Historical events for a date | date (YYYY-MM-DD) |
+| `query_collective_memory` | RAG on memory docs | question, num_results |
+| `get_collective_themes` | Overview of focus areas | (none) |
+| `get_activities` | Confirmed activities | (none) |
+| `read_past_publications` | Recent posts history | days_back, include_published |
+| `save_draft_post` | Save individual post | fecha, titulo, imagen, descripcion |
+| `generate_image` | DALL-E 3 generation | titulo, imagen_description, fecha |
+| `preview_image_prompt` | Preview DALL-E prompt | titulo, imagen_description |
+
+### Agent Workflow Example
+
+1. User: "Create a post about the climate march"
+2. Agent uses `search_web` to find news
+3. Agent uses `read_past_publications` to check for duplicates
+4. Agent uses `query_collective_memory` for context
+5. Agent presents draft post to user
+6. User approves → Agent uses `generate_image`
+7. Agent uses `save_draft_post` to store result
+
 ## Streamlit UI System
 
-### New UI Components
-- **`app.py`**: Main Streamlit application with full UI interface
+### UI Components
+- **`app.py`**: Main Streamlit application with navigation to Chat and Dashboard
+- **`chat_interface.py`**: Conversational interface with the CAUSA agent
 - **`config_manager.py`**: Secure configuration and API key management
 - **`file_manager.py`**: File upload, deletion, and management system
 - **`publication_editor.py`**: Post editing interface with bulk operations
 
 ### UI Features
-- **Configuration Interface**: All prompts, topics, and settings configurable through UI
+- **Chat Interface**: Conversational content creation with quick actions
+- **Configuration Interface**: All prompts, topics, and settings configurable
 - **File Management**: Drag & drop upload for memory documents and brand images
 - **Publication Editor**: Modal editors, bulk operations, image preview
 - **Secure API Management**: Encrypted local storage of API keys
@@ -124,9 +202,15 @@ Content must align with the collective's focus areas: environmentalism, animal r
 cd src
 pip install -r requirements.txt
 
-# Run Streamlit UI
+# Run Streamlit UI (includes Chat and Dashboard)
 streamlit run app.py
 ```
+
+### Legacy Batch Generation
+The original batch generation system is still available via:
+- Navigation: "Generar (Legacy)" in sidebar
+- CLI: `python src/main.py`
+- Direct: `python src/agent.py`
 
 ## Development Lessons & Common Errors
 

@@ -58,7 +58,7 @@ class PostManager:
         return settings.get(key, default)
 
     def save_draft_posts(self, posts: List[Dict], date: str = None) -> str:
-        """Save new posts as drafts for a specific date"""
+        """Save new posts as drafts for a specific date (appends to existing file)"""
         if not date:
             date = datetime.now().strftime('%Y-%m-%d')
 
@@ -70,17 +70,39 @@ class PostManager:
             post['created_at'] = datetime.now().isoformat()
             post['image_path'] = ''
 
-        df = pd.DataFrame(posts)
+        new_df = pd.DataFrame(posts)
 
         # Ensure columns are in correct order
         columns = ['fecha', 'titulo', 'imagen', 'descripcion', 'status', 'created_at', 'image_path']
-        df = df.reindex(columns=columns, fill_value='')
+        new_df = new_df.reindex(columns=columns, fill_value='')
 
         # Ensure image_path column is string type from the start
-        df['image_path'] = df['image_path'].astype('str')
+        new_df['image_path'] = new_df['image_path'].astype('str')
 
-        df.to_csv(draft_file, index=False, encoding='utf-8')
-        safe_print(f"✓ {len(posts)} posts guardados como borradores en: {draft_file}")
+        # If file exists, append to it instead of overwriting
+        if draft_file.exists():
+            try:
+                existing_df = pd.read_csv(draft_file, encoding='utf-8')
+                existing_df = existing_df.fillna('')
+
+                # Check for duplicates by titulo to avoid saving the same post twice
+                existing_titles = set(existing_df['titulo'].tolist())
+                new_posts_to_add = new_df[~new_df['titulo'].isin(existing_titles)]
+
+                if len(new_posts_to_add) > 0:
+                    combined_df = pd.concat([existing_df, new_posts_to_add], ignore_index=True)
+                    combined_df['image_path'] = combined_df['image_path'].astype('str')
+                    combined_df.to_csv(draft_file, index=False, encoding='utf-8')
+                    safe_print(f"✓ {len(new_posts_to_add)} posts añadidos a: {draft_file} (total: {len(combined_df)})")
+                else:
+                    safe_print(f"⚠️ Posts ya existen en: {draft_file}, no se añadieron duplicados")
+            except Exception as e:
+                # If error reading existing file, overwrite it
+                safe_print(f"⚠️ Error leyendo archivo existente, sobrescribiendo: {e}")
+                new_df.to_csv(draft_file, index=False, encoding='utf-8')
+        else:
+            new_df.to_csv(draft_file, index=False, encoding='utf-8')
+            safe_print(f"✓ {len(posts)} posts guardados como borradores en: {draft_file}")
 
         return str(draft_file)
 
@@ -313,3 +335,79 @@ class PostManager:
             'draft_files': len(list(self.drafts_dir.glob("posts_*.csv"))),
             'settings': self.load_settings()
         }
+
+    def get_recent_posts(self, days_back: int = 30, include_published: bool = True) -> List[Dict]:
+        """
+        Get recent posts from the last N days for history checking.
+
+        This method is used by the agent to check what content has been
+        recently created to avoid repetition.
+
+        Args:
+            days_back: Number of days to look back (default 30)
+            include_published: Whether to include already published posts (default True)
+
+        Returns:
+            List of post dictionaries with fecha, titulo, descripcion, status, and source
+        """
+        cutoff_date = datetime.now() - timedelta(days=days_back)
+        cutoff_str = cutoff_date.strftime("%Y-%m-%d")
+
+        all_posts = []
+
+        # Get drafts
+        drafts = self.get_draft_posts()
+        for draft in drafts:
+            if draft.get('fecha', '') >= cutoff_str:
+                all_posts.append({
+                    'fecha': draft.get('fecha', ''),
+                    'titulo': draft.get('titulo', ''),
+                    'descripcion': draft.get('descripcion', '')[:200],  # Truncate for efficiency
+                    'status': draft.get('status', 'draft'),
+                    'source': 'draft',
+                    'has_image': bool(draft.get('image_path', ''))
+                })
+
+        # Get published posts if requested
+        if include_published:
+            published = self.get_published_posts()
+            for post in published:
+                if post.get('fecha', '') >= cutoff_str:
+                    all_posts.append({
+                        'fecha': post.get('fecha', ''),
+                        'titulo': post.get('titulo', ''),
+                        'descripcion': post.get('descripcion', '')[:200],
+                        'status': 'published',
+                        'source': 'published',
+                        'has_image': bool(post.get('image_path', ''))
+                    })
+
+        # Sort by date (most recent first)
+        all_posts.sort(key=lambda x: x.get('fecha', ''), reverse=True)
+
+        return all_posts
+
+    def save_single_draft(self, fecha: str, titulo: str, imagen: str, descripcion: str) -> str:
+        """
+        Save a single post as a draft.
+
+        This method is used by the agent to save individual posts
+        (as opposed to batch saving).
+
+        Args:
+            fecha: Publication date in YYYY-MM-DD format
+            titulo: Post title
+            imagen: Image description for DALL-E generation
+            descripcion: Full post content with hashtags
+
+        Returns:
+            Path to the draft file
+        """
+        post = {
+            'fecha': fecha,
+            'titulo': titulo,
+            'imagen': imagen,
+            'descripcion': descripcion
+        }
+
+        return self.save_draft_posts([post], date=fecha)

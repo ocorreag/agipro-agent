@@ -21,6 +21,22 @@ from path_manager import setup_environment
 import agent
 import images
 
+# Lazy import for chat interface to handle potential dependency issues
+_chat_interface_available = None
+_chat_import_error = None
+
+def _get_chat_interface():
+    """Lazy load chat interface to handle import errors gracefully."""
+    global _chat_interface_available, _chat_import_error
+    if _chat_interface_available is None:
+        try:
+            from chat_interface import show_chat_interface
+            _chat_interface_available = show_chat_interface
+        except ImportError as e:
+            _chat_interface_available = False
+            _chat_import_error = str(e)
+    return _chat_interface_available, _chat_import_error
+
 # Page configuration
 st.set_page_config(
     page_title="CAUSA - Gestión de Contenido Social",
@@ -117,7 +133,8 @@ class CausaApp:
 
             pages = {
                 'dashboard': '🏠 Dashboard',
-                'generate': '✨ Generar Contenido',
+                'chat': '💬 Chat con Agente',
+                'generate': '✨ Generar (Legacy)',
                 'publications': '📝 Publicaciones',
                 'files': '📁 Archivos',
                 'config': '⚙️ Configuración'
@@ -196,6 +213,8 @@ class CausaApp:
 
         if current_page == 'dashboard':
             self._show_dashboard()
+        elif current_page == 'chat':
+            self._show_chat()
         elif current_page == 'generate':
             self._show_generate_content()
         elif current_page == 'publications':
@@ -204,6 +223,37 @@ class CausaApp:
             self._show_files()
         elif current_page == 'config':
             self._show_configuration()
+
+    def _show_chat(self):
+        """Show the chat interface with the CAUSA agent"""
+        chat_interface, error = _get_chat_interface()
+
+        if chat_interface:
+            chat_interface()
+        else:
+            st.title("💬 Chat con Agente")
+            st.error(f"""
+            **Error cargando el chat:**
+
+            {error}
+
+            **Solución sugerida:**
+
+            El error parece estar relacionado con la biblioteca `lxml`.
+            Ejecuta estos comandos en tu terminal para reinstalar:
+
+            ```bash
+            pip uninstall lxml ddgs
+            pip install --no-cache-dir lxml ddgs
+            ```
+
+            Si estás en un Mac con chip M1/M2, también puedes probar:
+            ```bash
+            pip install --no-binary :all: lxml
+            ```
+
+            Mientras tanto, puedes usar el generador legacy desde "Generar (Legacy)" en el menú.
+            """)
 
     def _show_dashboard(self):
         """Show dashboard overview"""
@@ -219,20 +269,31 @@ class CausaApp:
             st.subheader("👋 Bienvenido")
             st.write("""
             Esta aplicación te permite gestionar todo el contenido social del colectivo CAUSA:
-            - ✨ **Generar contenido** automáticamente con IA
+            - 💬 **Chat con el Agente** - Crea contenido conversando con IA
             - 📝 **Editar publicaciones** antes de publicar
             - 📁 **Gestionar archivos** de memoria y línea gráfica
             - ⚙️ **Configurar** prompts, API keys y parámetros
             """)
 
+            # Highlight the new Chat feature
+            st.info("""
+            **Nuevo: Agente Conversacional**
+
+            Ahora puedes crear contenido conversando con el agente. El agente puede:
+            - Buscar noticias y efemérides con sus propias consultas
+            - Revisar publicaciones anteriores para evitar repeticiones
+            - Crear posts flexiblemente (1 o muchos)
+            - Generar imágenes solo cuando las apruebes
+            """)
+
             # Quick actions
             st.subheader("🚀 Acciones Rápidas")
 
-            col_a, col_b, col_c = st.columns(3)
+            col_a, col_b, col_c, col_d = st.columns(4)
 
             with col_a:
-                if st.button("✨ Generar Contenido Nuevo", type="primary"):
-                    st.session_state['current_page'] = 'generate'
+                if st.button("💬 Chat con Agente", type="primary"):
+                    st.session_state['current_page'] = 'chat'
                     st.rerun()
 
             with col_b:
@@ -241,6 +302,11 @@ class CausaApp:
                     st.rerun()
 
             with col_c:
+                if st.button("📁 Archivos"):
+                    st.session_state['current_page'] = 'files'
+                    st.rerun()
+
+            with col_d:
                 if st.button("⚙️ Configuración"):
                     st.session_state['current_page'] = 'config'
                     st.rerun()
