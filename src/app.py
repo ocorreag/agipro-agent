@@ -109,6 +109,54 @@ def logout():
     st.session_state["current_user"] = None
     st.rerun()
 
+
+# =============================================================================
+# Hybrid Mode Detection
+# =============================================================================
+
+HYBRID_MODE = os.getenv("CAUSA_MODE", "local").lower() == "hybrid"
+
+# Import bridge only in hybrid mode
+if HYBRID_MODE:
+    from local_bridge import get_bridge, check_helper_connection, LocalBridge
+    _bridge: LocalBridge = None
+
+    def get_app_bridge() -> LocalBridge:
+        """Get or create bridge instance for the app."""
+        global _bridge
+        if _bridge is None:
+            _bridge = get_bridge()
+        return _bridge
+
+
+def check_local_helper_status() -> dict:
+    """Check Local Helper connection status."""
+    if not HYBRID_MODE:
+        return {"mode": "local", "connected": True, "message": "Modo local (filesystem directo)"}
+
+    bridge = get_app_bridge()
+    connected = bridge.check_connection()
+
+    if connected:
+        status = bridge.get_status()
+        return {
+            "mode": "hybrid",
+            "connected": True,
+            "message": "Local Helper conectado",
+            "details": status
+        }
+    else:
+        return {
+            "mode": "hybrid",
+            "connected": False,
+            "message": "Local Helper no conectado",
+            "error": bridge.get_last_error()
+        }
+
+
+# Import agent logger
+from agent_logger import get_agent_logger
+
 # Lazy import for chat interface to handle potential dependency issues
 _chat_interface_available = None
 _chat_import_error = None
@@ -214,6 +262,15 @@ class CausaApp:
             st.title("🌱 CAUSA")
             st.caption("Gestión de Contenido Social")
             st.markdown('</div>', unsafe_allow_html=True)
+
+            # Show Local Helper connection status in hybrid mode
+            if HYBRID_MODE:
+                helper_status = check_local_helper_status()
+                if helper_status["connected"]:
+                    st.success("🔗 Local Helper conectado")
+                else:
+                    st.error("⚠️ Local Helper desconectado")
+                    st.caption("Ejecute el Local Helper para guardar archivos")
 
             # Navigation
             st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
@@ -356,6 +413,25 @@ class CausaApp:
         st.title("🏠 Dashboard - CAUSA")
         st.write("Colectivo Ambiental de Usaca - Gestión de Contenido Social")
         st.markdown('</div>', unsafe_allow_html=True)
+
+        # Show Local Helper warning in hybrid mode
+        if HYBRID_MODE:
+            helper_status = check_local_helper_status()
+            if not helper_status["connected"]:
+                st.warning("""
+                ⚠️ **Local Helper no conectado**
+
+                Para usar todas las funciones, necesitas ejecutar el Local Helper en tu computadora:
+
+                1. Descarga y extrae el Local Helper
+                2. Abre una terminal y ejecuta: `python server.py`
+                3. Mantén la terminal abierta mientras usas la aplicación
+
+                Sin el Local Helper:
+                - ❌ No se pueden cargar documentos de memoria (RAG)
+                - ❌ No se pueden guardar publicaciones
+                - ❌ No se pueden usar imágenes de marca
+                """)
 
         # Welcome and status
         col1, col2 = st.columns([2, 1])
@@ -796,7 +872,7 @@ class CausaApp:
         st.title("⚙️ Configuración")
 
         # Configuration tabs
-        tab1, tab2, tab3, tab4 = st.tabs(["🔑 API Keys", "📋 General", "💬 Prompts", "📊 Google Sheets"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔑 API Keys", "📋 General", "💬 Prompts", "📊 Google Sheets", "📜 Logs"])
 
         with tab1:
             self._show_api_config()
@@ -809,6 +885,81 @@ class CausaApp:
 
         with tab4:
             self._show_sheets_config()
+
+        with tab5:
+            self._show_agent_logs()
+
+    def _show_agent_logs(self):
+        """Show agent activity logs"""
+        st.subheader("📜 Registro de Actividad del Agente")
+
+        agent_logger = get_agent_logger()
+
+        # Summary
+        summary = agent_logger.get_summary()
+
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Total Acciones", summary["total_actions"])
+        with col2:
+            st.metric("Exitosas", summary["success_count"])
+        with col3:
+            st.metric("Errores", summary["error_count"])
+        with col4:
+            st.metric("Duración", f"{summary['duration_seconds']:.0f}s")
+
+        # Action breakdown
+        if summary["action_breakdown"]:
+            st.subheader("Desglose por Tipo")
+            cols = st.columns(len(summary["action_breakdown"]))
+            for i, (action_type, count) in enumerate(summary["action_breakdown"].items()):
+                with cols[i % len(cols)]:
+                    st.metric(action_type, count)
+
+        st.divider()
+
+        # Recent actions
+        st.subheader("Acciones Recientes")
+
+        # Refresh button
+        if st.button("🔄 Actualizar Logs"):
+            st.rerun()
+
+        actions = agent_logger.get_recent_actions(limit=50)
+
+        if not actions:
+            st.info("No hay acciones registradas aún. El agente registrará sus acciones cuando genere contenido.")
+        else:
+            for action in reversed(actions):
+                # Color based on success
+                if action["success"]:
+                    icon = "✅" if action["action_type"] != "init" else "🚀"
+                else:
+                    icon = "❌"
+
+                # Format timestamp
+                timestamp = action["timestamp"].split("T")[1].split(".")[0] if "T" in action["timestamp"] else action["timestamp"]
+
+                with st.expander(f"{icon} [{timestamp}] {action['action_type']}: {action['description']}", expanded=False):
+                    st.write(f"**Tipo:** {action['action_type']}")
+                    st.write(f"**Descripción:** {action['description']}")
+
+                    if action.get("duration_ms"):
+                        st.write(f"**Duración:** {action['duration_ms']:.0f}ms")
+
+                    if action.get("details"):
+                        st.write("**Detalles:**")
+                        st.json(action["details"])
+
+                    if action.get("error"):
+                        st.error(f"**Error:** {action['error']}")
+
+        # Clear logs button
+        st.divider()
+        if st.button("🗑️ Limpiar Logs", type="secondary"):
+            agent_logger.clear()
+            st.success("Logs limpiados")
+            st.rerun()
 
     def _show_api_config(self):
         """Show API keys configuration"""
