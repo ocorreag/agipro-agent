@@ -34,11 +34,36 @@ This is **agipro-agent**, a Python-based social media content generation system 
   - **`settings.json`**: Configuration file (posts_per_day, cleanup_months)
   - **`published_posts.csv`**: Record of published content
 
-## Development Commands
+## Installation & Running
 
-### Running the System
+### Quick Start
 ```bash
-# Full pipeline (from project root)
+# Clone and install
+git clone https://github.com/your-username/agipro-agent.git
+cd agipro-agent
+./install.sh  # macOS/Linux
+# or: install.bat  # Windows
+
+# Activate environment and run
+source venv/bin/activate
+cd src && streamlit run app.py
+```
+
+### Manual Installation
+```bash
+python -m venv venv
+source venv/bin/activate  # or venv\Scripts\activate on Windows
+pip install -r src/requirements.txt
+cp .env.example .env  # Add your OPENAI_API_KEY
+cd src && streamlit run app.py
+```
+
+### Development Commands
+```bash
+# Streamlit UI (recommended)
+cd src && streamlit run app.py
+
+# Full pipeline (legacy batch mode)
 python src/main.py
 
 # Content generation only
@@ -48,20 +73,13 @@ python src/agent.py
 python src/images.py
 ```
 
-### Docker Deployment
-```bash
-# Build image
-docker build -t agipro-agent .
-
-# Run container
-docker run agipro-agent
-```
-
 ### Dependencies
 Requirements are managed in `src/requirements.txt`. Key dependencies:
 - LangChain + LangGraph for AI workflows
-- OpenAI for LLM inference and image generation (DALL-E 3)
+- OpenAI for LLM inference, embeddings, and image generation (DALL-E 3)
+- ChromaDB for vector storage (uses OpenAI embeddings)
 - pandas for CSV management
+- Streamlit for web UI
 
 ### LLM Model Configuration
 - **Model**: `gpt-5-nano` (OpenAI's reasoning model)
@@ -230,12 +248,7 @@ encoded_sheet_name = quote(sheet_name)
 url = f'https://docs.google.com/spreadsheets/d/{gsheet_id}/gviz/tq?tqx=out:csv&sheet={encoded_sheet_name}'
 ```
 
-#### 2. **Missing Dependencies Error**
-**Error**: `Package 'sentence-transformers' is not installed`
-**Cause**: Required package not listed in requirements.txt
-**Solution**: Added missing dependency to requirements.txt
-
-#### 3. **LangGraph "creator" Error**
+#### 2. **LangGraph "creator" Error**
 **Error**: `Error en la generación: "creator"`
 **Cause**: Incorrect LangGraph workflow configuration
 **Solutions Applied**:
@@ -378,12 +391,11 @@ else:
 This session resolved several critical system issues:
 
 1. **✅ Google Sheets URL encoding** - Fixed space character handling
-2. **✅ Missing dependencies** - Added sentence-transformers
-3. **✅ LangGraph workflow errors** - Fixed StateGraph configuration
-4. **✅ ChatPromptTemplate formatting** - Resolved f-string/template mixing
-5. **✅ Image path synchronization** - Fixed multi-date CSV handling
-6. **✅ UI TypeError fixes** - Added NaN protection for pandas DataFrames
-7. **✅ Universal image format** - Optimized for cost and compatibility
+2. **✅ LangGraph workflow errors** - Fixed StateGraph configuration
+3. **✅ ChatPromptTemplate formatting** - Resolved f-string/template mixing
+4. **✅ Image path synchronization** - Fixed multi-date CSV handling
+5. **✅ UI TypeError fixes** - Added NaN protection for pandas DataFrames
+6. **✅ Universal image format** - Optimized for cost and compatibility
 
 ### Performance Improvements
 - **Reduced API costs**: 50% fewer DALL-E calls

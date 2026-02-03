@@ -1,146 +1,173 @@
-# CAUSA - Streamlit UI Documentation
+# CAUSA Agent - Social Media Content Generator
 
-## 🚀 Quick Start
+AI-powered social media content generation system for **Colectivo Ambiental de Usaca - CAUSA**, an environmental and social collective based in Bogotá, Colombia.
+
+## Features
+
+- **AI Content Generation**: Creates contextual social media posts based on news, historical dates, and collective activities
+- **Image Generation**: DALL-E 3 integration for branded social media images
+- **RAG Memory**: Searches collective's documents to ensure content alignment
+- **Web Interface**: Streamlit-based chat interface and content management dashboard
+- **Local Storage**: All data stored locally in CSV files for easy review
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.11 or higher
+- OpenAI API key
 
 ### Installation
 
-1. Install the new dependencies:
+**Option 1: Using install script (recommended)**
+
 ```bash
-cd src
-pip install -r requirements.txt
+# Clone the repository
+git clone https://github.com/your-username/agipro-agent.git
+cd agipro-agent
+
+# Run install script
+# macOS/Linux:
+./install.sh
+
+# Windows:
+install.bat
 ```
 
-2. Run the new Streamlit UI:
+**Option 2: Manual installation**
+
 ```bash
+# Clone the repository
+git clone https://github.com/your-username/agipro-agent.git
+cd agipro-agent
+
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# macOS/Linux:
+source venv/bin/activate
+# Windows:
+venv\Scripts\activate
+
+# Install dependencies
+pip install -r src/requirements.txt
+
+# Copy environment file and add your API key
+cp .env.example .env
+# Edit .env and add your OPENAI_API_KEY
+```
+
+### Running the Application
+
+```bash
+# Make sure virtual environment is activated
+source venv/bin/activate  # macOS/Linux
+# or: venv\Scripts\activate  # Windows
+
+# Start the application
+cd src
 streamlit run app.py
 ```
 
-The application will open in your web browser at `http://localhost:8501`
+The application will open in your browser at `http://localhost:8501`
 
 ### First-Time Setup
 
-1. **Configure API Keys** (Configuration → API Keys tab):
-   - Add your OpenAI API Key (for DALL-E 3 image generation)
-   - Add your Groq API Key (for LLM content generation)
+1. Go to **Configuration** tab
+2. Enter your **OpenAI API Key**
+3. (Optional) Upload memory documents in **Files > Memoria**
+4. (Optional) Upload brand images in **Files > Línea Gráfica**
 
-2. **Upload Memory Documents** (Files → Memoria tab):
-   - Upload PDF and TXT files containing collective's ideology and history
+## Usage
 
-3. **Upload Brand Images** (Files → Línea Gráfica tab):
-   - Upload PNG/JPG images that define the visual style
+### Chat Interface
+Navigate to "Chat con Agente" to have a conversation with the AI agent. You can:
+- Request posts about specific topics
+- Ask for news-based content
+- Request historical commemorations (ephemerides)
+- Generate images for approved content
 
-4. **Configure Settings** (Configuration → General tab):
-   - Set posts per day (1-6)
-   - Set days to generate content for
-   - Set collective topics
+### Dashboard
+View and manage all generated content:
+- Edit individual posts
+- Generate images
+- Mark posts as published
+- Delete unwanted content
 
-## 🎛️ Main Features
+### Legacy Batch Generation
+For automated batch generation:
+```bash
+cd src
+python main.py
+```
 
-### 🏠 Dashboard
-- Overview of system status
-- Quick statistics (drafts, published posts, files)
-- System health indicators
-- Quick action buttons
+## Project Structure
 
-### ✨ Generate Content
-- **Configurable Parameters**: Days to generate, posts per day
-- **Custom Topics**: Editable collective topics string
-- **Image Generation**: Optional DALL-E 3 integration
-- **Advanced Options**: Custom prompts, timeline settings
-- **Progress Tracking**: Real-time generation progress
+```
+agipro-agent/
+├── src/                    # Source code
+│   ├── app.py             # Main Streamlit application
+│   ├── causa_agent.py     # AI agent with tools
+│   ├── chat_interface.py  # Chat UI component
+│   ├── images.py          # DALL-E 3 integration
+│   ├── csv_manager.py     # Data management
+│   └── tools/             # Agent tools
+├── publicaciones/         # Generated content (created at runtime)
+│   ├── drafts/           # Draft posts (CSV)
+│   └── imagenes/         # Generated images
+├── memory/               # Collective documents (created at runtime)
+├── linea_grafica/        # Brand images (created at runtime)
+├── .env.example          # Environment template
+└── requirements.txt      # Python dependencies
+```
 
-### 📝 Publications Management
-- **Individual Editing**: Modal editors for each post
-- **Bulk Operations**:
-  - Delete multiple posts
-  - Change dates in batch
-  - Mark as published
-- **Filtering & Sorting**: By date, title, creation time
-- **Image Preview**: See generated images
-- **Add to Brand**: Copy generated images to línea gráfica
+## Configuration
 
-### 📁 File Management
+### Environment Variables (.env)
 
-#### 📚 Memory Documents
-- **Drag & Drop Upload**: Multiple PDF/TXT files
-- **File Information**: Size, modification date, type
-- **Bulk Delete**: Select and delete multiple files
+```bash
+# Required
+OPENAI_API_KEY=your_openai_api_key_here
 
-#### 🎨 Línea Gráfica Images
-- **Image Upload**: PNG, JPG, GIF, WebP support
-- **Bulk Management**: Select and delete multiple images
-- **File Details**: Size and modification info
+# Optional - Google Sheets for activities calendar
+GOOGLE_SHEETS_ID=your_google_sheets_id_here
+GOOGLE_SHEETS_NAME=Hoja 1
 
-#### 🖼️ Generated Images
-- **Visual Preview**: Thumbnail previews of all generated images
-- **Add to Brand**: One-click copy to línea gráfica folder
-- **Management**: Delete unwanted generated images
+# Content settings
+POSTS_PER_DAY=3
+DAYS_TO_GENERATE=2
+```
 
-### ⚙️ Configuration
+## Requirements
 
-#### 🔑 API Keys
-- **Secure Storage**: Encrypted local storage
-- **Easy Management**: Input fields with password masking
-- **Auto .env Update**: Automatically updates .env file
-- **Connection Testing**: Test API connections (coming soon)
+- Python 3.11+
+- OpenAI API key with access to:
+  - GPT models (for content generation)
+  - DALL-E 3 (for image generation)
+  - Embeddings API (for RAG memory search)
 
-#### 📋 General Settings
-- **Posts per Day**: 1-6 configurable posts
-- **Generation Timeline**: Days from today
-- **Auto-cleanup**: Months before auto-deletion
-- **Collective Topics**: Freely editable topics string
+## Troubleshooting
 
-#### 💬 Prompts Configuration
-- **System Message**: Main AI behavior prompt
-- **Content Prompts**: News, ephemerides, activities
-- **Image Prompts**: DALL-E 3 generation instructions
-- **Reset Option**: Restore default prompts
+### "Module not found" errors
+Make sure you've activated the virtual environment:
+```bash
+source venv/bin/activate  # macOS/Linux
+venv\Scripts\activate     # Windows
+```
 
-#### 📊 Google Sheets Integration
-- **Sheet ID Configuration**: Change source Google Sheet
-- **Sheet Name**: Configure specific sheet name
-- **Instructions**: Setup guidance for public sheets
+### API key issues
+1. Verify your OpenAI API key is valid
+2. Check you have credits in your OpenAI account
+3. Ensure the key has access to GPT and DALL-E models
 
-## 🔧 Technical Details
+### Port already in use
+If port 8501 is busy, Streamlit will automatically try the next available port. Check the terminal output for the correct URL.
 
-### New Components Created:
-- **`config_manager.py`**: Secure configuration and API key management
-- **`file_manager.py`**: File upload, deletion, and management
-- **`publication_editor.py`**: Post editing and bulk operations
-- **`app.py`**: Main Streamlit application
+## License
 
-### Security Features:
-- **Encrypted API Keys**: Using Fernet encryption
-- **Local Storage**: All sensitive data stored locally
-- **No Remote Dependencies**: Self-contained system
+This project is for use by Colectivo Ambiental de Usaca - CAUSA.
 
-### Integration:
-- **Backward Compatible**: Works with existing `main.py`, `agent.py`, `images.py`
-- **Enhanced Configuration**: Existing modules now use configurable settings
-- **Preserved Functionality**: All original features maintained
+## Privacy Policy
 
-## 📖 Usage Workflow
-
-1. **Setup**: Configure API keys and upload memory/brand files
-2. **Generate**: Create new content with custom parameters
-3. **Review**: Edit individual posts or perform bulk operations
-4. **Manage**: Organize files and generated images
-5. **Configure**: Adjust prompts and settings as needed
-
-## 🔄 Migration from Old System
-
-The new UI is fully compatible with the existing system:
-
-- **Existing CSV files** are automatically recognized
-- **Memory and línea gráfica folders** work as before
-- **Generated images** are compatible
-- **Old main.py** can still be used for command-line operation
-
-## 🎯 Advanced Features
-
-- **Custom Prompts**: Full control over AI behavior
-- **Flexible Timeline**: Generate for any number of days ahead
-- **Visual Management**: See all content before publishing
-- **Bulk Operations**: Efficient multi-post editing
-- **Smart Filters**: Find posts by various criteria
-- **Secure Config**: Encrypted, local configuration storage
+https://www.termsfeed.com/live/72a5f116-1efd-4516-83a7-ee84638dee81

@@ -55,22 +55,17 @@ env/
 secrets.enc
 
 # -----------------------------------------------------------------------------
-# Data Directories (user-generated content at project root)
+# Data Directories (user-generated content)
 # These folders contain user data and are created at runtime
 # -----------------------------------------------------------------------------
 /publicaciones/
 /memory/
 /linea_grafica/
 
-# -----------------------------------------------------------------------------
-# Build Artifacts
-# -----------------------------------------------------------------------------
-/build_config/dist/
-/build_config/build/
-*.spec.bak
-*.dmg
-*.zip
-*.exe
+# Also ignore if created inside src/ (legacy)
+/src/publicaciones/
+/src/memory/
+/src/linea_grafica/
 
 # -----------------------------------------------------------------------------
 # Testing & Coverage
