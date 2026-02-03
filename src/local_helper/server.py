@@ -290,23 +290,117 @@ async def upload_linea_grafica(file: UploadFile = File(...)):
 
 
 # -----------------------------------------------------------------------------
-# Configuration
+# Configuration (Prompts, Settings, API Keys)
 # -----------------------------------------------------------------------------
+
+DEFAULT_CONFIG = {
+    "organization_name": "Mi Organización",
+    "system_prompt": """Eres un experto en comunicación y marketing digital especializado en crear contenido para redes sociales.
+Tu objetivo es generar publicaciones atractivas, informativas y que generen engagement.
+Debes adaptar el tono y estilo según la plataforma (Instagram, Facebook, Twitter/X, LinkedIn).
+Usa emojis de forma moderada y estratégica.
+Incluye llamados a la acción cuando sea apropiado.""",
+    "content_guidelines": """- Mantén un tono profesional pero cercano
+- Usa hashtags relevantes (3-5 por publicación)
+- Incluye preguntas para fomentar interacción
+- Adapta la longitud según la plataforma
+- Evita contenido controversial o político""",
+    "brand_voice": "Profesional, amigable, innovador",
+    "target_audience": "Profesionales y emprendedores de 25-45 años",
+    "platforms": ["instagram", "facebook", "linkedin"],
+    "posts_per_day": 3,
+    "include_images": True,
+    "language": "es"
+}
+
 
 @app.get("/api/config")
 async def get_config():
-    """Get current configuration."""
+    """Get current configuration including prompts."""
     config_path = BASE_DIR / "config.json"
     if config_path.exists():
-        return json.loads(config_path.read_text())
-    return {}
+        try:
+            saved_config = json.loads(config_path.read_text())
+            # Merge with defaults (in case new fields were added)
+            config = {**DEFAULT_CONFIG, **saved_config}
+            return config
+        except:
+            pass
+    return DEFAULT_CONFIG
 
 
 @app.post("/api/config")
 async def save_config(config: ConfigData):
-    """Save configuration."""
+    """Save configuration including prompts."""
     config_path = BASE_DIR / "config.json"
-    config_path.write_text(json.dumps(config.settings, indent=2))
+    # Merge with existing config
+    existing = DEFAULT_CONFIG.copy()
+    if config_path.exists():
+        try:
+            existing = json.loads(config_path.read_text())
+        except:
+            pass
+    existing.update(config.settings)
+    config_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False))
+    return {"success": True}
+
+
+@app.get("/api/config/prompts")
+async def get_prompts():
+    """Get just the prompts configuration."""
+    config = await get_config()
+    return {
+        "system_prompt": config.get("system_prompt", DEFAULT_CONFIG["system_prompt"]),
+        "content_guidelines": config.get("content_guidelines", DEFAULT_CONFIG["content_guidelines"]),
+        "brand_voice": config.get("brand_voice", DEFAULT_CONFIG["brand_voice"]),
+        "target_audience": config.get("target_audience", DEFAULT_CONFIG["target_audience"]),
+    }
+
+
+@app.post("/api/config/prompts")
+async def save_prompts(prompts: dict):
+    """Save prompts configuration."""
+    config_path = BASE_DIR / "config.json"
+    existing = DEFAULT_CONFIG.copy()
+    if config_path.exists():
+        try:
+            existing = json.loads(config_path.read_text())
+        except:
+            pass
+
+    # Update only prompt-related fields
+    for key in ["system_prompt", "content_guidelines", "brand_voice", "target_audience"]:
+        if key in prompts:
+            existing[key] = prompts[key]
+
+    config_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False))
+    return {"success": True}
+
+
+@app.get("/api/config/apikey")
+async def get_api_key():
+    """Get stored API key (encrypted)."""
+    config = await get_config()
+    # Return masked key for display
+    key = config.get("openai_api_key", "")
+    if key:
+        return {"has_key": True, "masked": key[:8] + "..." + key[-4:] if len(key) > 12 else "***"}
+    return {"has_key": False, "masked": ""}
+
+
+@app.post("/api/config/apikey")
+async def save_api_key(data: dict):
+    """Save API key."""
+    config_path = BASE_DIR / "config.json"
+    existing = DEFAULT_CONFIG.copy()
+    if config_path.exists():
+        try:
+            existing = json.loads(config_path.read_text())
+        except:
+            pass
+
+    existing["openai_api_key"] = data.get("api_key", "")
+    config_path.write_text(json.dumps(existing, indent=2, ensure_ascii=False))
     return {"success": True}
 
 
