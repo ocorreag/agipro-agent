@@ -105,7 +105,7 @@ def display_image_preview(image_path: str):
 
         if path.exists() and path.is_file():
             img = Image.open(path)
-            st.image(img, caption=f"📷 {path.name}", width="stretch")
+            st.image(img, caption=f"📷 {path.name}", use_container_width=True)
             return True
         else:
             st.warning(f"⚠️ Imagen no encontrada: {image_path}")

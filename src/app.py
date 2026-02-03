@@ -8,7 +8,6 @@ import pandas as pd
 from datetime import datetime, timedelta
 from pathlib import Path
 import os
-import hashlib
 from PIL import Image
 import subprocess
 import sys
@@ -21,141 +20,6 @@ from csv_manager import PostManager
 from path_manager import setup_environment
 import agent
 import images
-
-
-# =============================================================================
-# Authentication
-# =============================================================================
-
-# Credentials (hashed for security)
-# In production, use environment variables or a secure vault
-AUTH_USERS = {
-    "causa": hashlib.sha256("queserasdelmedio1819".encode()).hexdigest()
-}
-
-
-def check_password():
-    """Returns True if the user has entered correct credentials."""
-
-    def password_entered():
-        """Checks whether password entered is correct."""
-        username = st.session_state.get("username", "")
-        password = st.session_state.get("password", "")
-        password_hash = hashlib.sha256(password.encode()).hexdigest()
-
-        if username in AUTH_USERS and AUTH_USERS[username] == password_hash:
-            st.session_state["authenticated"] = True
-            st.session_state["current_user"] = username
-            # Clear password from session state
-            del st.session_state["password"]
-        else:
-            st.session_state["authenticated"] = False
-            st.session_state["login_error"] = True
-
-    # First run or not authenticated
-    if "authenticated" not in st.session_state:
-        st.session_state["authenticated"] = False
-
-    if not st.session_state["authenticated"]:
-        # Show login form
-        st.markdown("""
-        <style>
-            .login-container {
-                max-width: 400px;
-                margin: 100px auto;
-                padding: 40px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                border-radius: 20px;
-                box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-            }
-            .login-title {
-                text-align: center;
-                color: white;
-                font-size: 2.5em;
-                margin-bottom: 10px;
-            }
-            .login-subtitle {
-                text-align: center;
-                color: rgba(255,255,255,0.8);
-                margin-bottom: 30px;
-            }
-        </style>
-        """, unsafe_allow_html=True)
-
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            st.markdown("# 🌱 CAUSA")
-            st.markdown("### Sistema de Gestión de Contenido")
-            st.markdown("---")
-
-            st.text_input("Usuario", key="username")
-            st.text_input("Contraseña", type="password", key="password")
-
-            if st.button("Iniciar Sesión", type="primary", use_container_width=True):
-                password_entered()
-
-            if st.session_state.get("login_error"):
-                st.error("❌ Usuario o contraseña incorrectos")
-                st.session_state["login_error"] = False
-
-        return False
-
-    return True
-
-
-def logout():
-    """Logout the current user."""
-    st.session_state["authenticated"] = False
-    st.session_state["current_user"] = None
-    st.rerun()
-
-
-# =============================================================================
-# Hybrid Mode Detection
-# =============================================================================
-
-HYBRID_MODE = os.getenv("CAUSA_MODE", "local").lower() == "hybrid"
-
-# Import bridge only in hybrid mode
-if HYBRID_MODE:
-    from local_bridge import get_bridge, check_helper_connection, LocalBridge
-    _bridge: LocalBridge = None
-
-    def get_app_bridge() -> LocalBridge:
-        """Get or create bridge instance for the app."""
-        global _bridge
-        if _bridge is None:
-            _bridge = get_bridge()
-        return _bridge
-
-
-def check_local_helper_status() -> dict:
-    """Check Local Helper connection status."""
-    if not HYBRID_MODE:
-        return {"mode": "local", "connected": True, "message": "Modo local (filesystem directo)"}
-
-    bridge = get_app_bridge()
-    connected = bridge.check_connection()
-
-    if connected:
-        status = bridge.get_status()
-        return {
-            "mode": "hybrid",
-            "connected": True,
-            "message": "Local Helper conectado",
-            "details": status
-        }
-    else:
-        return {
-            "mode": "hybrid",
-            "connected": False,
-            "message": "Local Helper no conectado",
-            "error": bridge.get_last_error()
-        }
-
-
-# Import agent logger
-from agent_logger import get_agent_logger
 
 # Lazy import for chat interface to handle potential dependency issues
 _chat_interface_available = None
@@ -263,15 +127,6 @@ class CausaApp:
             st.caption("Gestión de Contenido Social")
             st.markdown('</div>', unsafe_allow_html=True)
 
-            # Show Local Helper connection status in hybrid mode
-            if HYBRID_MODE:
-                helper_status = check_local_helper_status()
-                if helper_status["connected"]:
-                    st.success("🔗 Local Helper conectado")
-                else:
-                    st.error("⚠️ Local Helper desconectado")
-                    st.caption("Ejecute el Local Helper para guardar archivos")
-
             # Navigation
             st.markdown('<div class="sidebar-section">', unsafe_allow_html=True)
             st.subheader("🧭 Navegación")
@@ -294,13 +149,6 @@ class CausaApp:
 
             # Quick stats
             self._show_quick_stats()
-
-            # User info and logout
-            st.markdown("---")
-            current_user = st.session_state.get("current_user", "Usuario")
-            st.caption(f"👤 Conectado como: **{current_user}**")
-            if st.button("🚪 Cerrar Sesión", key="logout_btn"):
-                logout()
 
             # System status
             self._show_system_status()
@@ -413,25 +261,6 @@ class CausaApp:
         st.title("🏠 Dashboard - CAUSA")
         st.write("Colectivo Ambiental de Usaca - Gestión de Contenido Social")
         st.markdown('</div>', unsafe_allow_html=True)
-
-        # Show Local Helper warning in hybrid mode
-        if HYBRID_MODE:
-            helper_status = check_local_helper_status()
-            if not helper_status["connected"]:
-                st.warning("""
-                ⚠️ **Local Helper no conectado**
-
-                Para usar todas las funciones, necesitas ejecutar el Local Helper en tu computadora:
-
-                1. Descarga y extrae el Local Helper
-                2. Abre una terminal y ejecuta: `python server.py`
-                3. Mantén la terminal abierta mientras usas la aplicación
-
-                Sin el Local Helper:
-                - ❌ No se pueden cargar documentos de memoria (RAG)
-                - ❌ No se pueden guardar publicaciones
-                - ❌ No se pueden usar imágenes de marca
-                """)
 
         # Welcome and status
         col1, col2 = st.columns([2, 1])
@@ -732,7 +561,7 @@ class CausaApp:
             col1, col2 = st.columns([0.1, 0.9])
 
             with col1:
-                if st.checkbox("Select", key=f"memory_{file_info['name']}", label_visibility="collapsed"):
+                if st.checkbox("", key=f"memory_{file_info['name']}", label_visibility="collapsed"):
                     selected_files.append(file_info['path'])
 
             with col2:
@@ -842,7 +671,7 @@ class CausaApp:
                 # Show image preview
                 try:
                     image = Image.open(image_info['path'])
-                    st.image(image, width="stretch")
+                    st.image(image, use_column_width=True)
                 except Exception as e:
                     st.error(f"Error loading image: {e}")
 
@@ -872,7 +701,7 @@ class CausaApp:
         st.title("⚙️ Configuración")
 
         # Configuration tabs
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔑 API Keys", "📋 General", "💬 Prompts", "📊 Google Sheets", "📜 Logs"])
+        tab1, tab2, tab3, tab4 = st.tabs(["🔑 API Keys", "📋 General", "💬 Prompts", "📊 Google Sheets"])
 
         with tab1:
             self._show_api_config()
@@ -885,81 +714,6 @@ class CausaApp:
 
         with tab4:
             self._show_sheets_config()
-
-        with tab5:
-            self._show_agent_logs()
-
-    def _show_agent_logs(self):
-        """Show agent activity logs"""
-        st.subheader("📜 Registro de Actividad del Agente")
-
-        agent_logger = get_agent_logger()
-
-        # Summary
-        summary = agent_logger.get_summary()
-
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Total Acciones", summary["total_actions"])
-        with col2:
-            st.metric("Exitosas", summary["success_count"])
-        with col3:
-            st.metric("Errores", summary["error_count"])
-        with col4:
-            st.metric("Duración", f"{summary['duration_seconds']:.0f}s")
-
-        # Action breakdown
-        if summary["action_breakdown"]:
-            st.subheader("Desglose por Tipo")
-            cols = st.columns(len(summary["action_breakdown"]))
-            for i, (action_type, count) in enumerate(summary["action_breakdown"].items()):
-                with cols[i % len(cols)]:
-                    st.metric(action_type, count)
-
-        st.divider()
-
-        # Recent actions
-        st.subheader("Acciones Recientes")
-
-        # Refresh button
-        if st.button("🔄 Actualizar Logs"):
-            st.rerun()
-
-        actions = agent_logger.get_recent_actions(limit=50)
-
-        if not actions:
-            st.info("No hay acciones registradas aún. El agente registrará sus acciones cuando genere contenido.")
-        else:
-            for action in reversed(actions):
-                # Color based on success
-                if action["success"]:
-                    icon = "✅" if action["action_type"] != "init" else "🚀"
-                else:
-                    icon = "❌"
-
-                # Format timestamp
-                timestamp = action["timestamp"].split("T")[1].split(".")[0] if "T" in action["timestamp"] else action["timestamp"]
-
-                with st.expander(f"{icon} [{timestamp}] {action['action_type']}: {action['description']}", expanded=False):
-                    st.write(f"**Tipo:** {action['action_type']}")
-                    st.write(f"**Descripción:** {action['description']}")
-
-                    if action.get("duration_ms"):
-                        st.write(f"**Duración:** {action['duration_ms']:.0f}ms")
-
-                    if action.get("details"):
-                        st.write("**Detalles:**")
-                        st.json(action["details"])
-
-                    if action.get("error"):
-                        st.error(f"**Error:** {action['error']}")
-
-        # Clear logs button
-        st.divider()
-        if st.button("🗑️ Limpiar Logs", type="secondary"):
-            agent_logger.clear()
-            st.success("Logs limpiados")
-            st.rerun()
 
     def _show_api_config(self):
         """Show API keys configuration"""
@@ -1170,10 +924,6 @@ class CausaApp:
 
 def main():
     """Main entry point"""
-    # Check authentication first
-    if not check_password():
-        return  # Stop here if not authenticated
-
     # Setup environment and paths
     setup_environment()
 

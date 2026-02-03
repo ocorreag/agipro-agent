@@ -1,19 +1,18 @@
 import os
 from datetime import datetime, timedelta
-from typing import Annotated, List, TypedDict, Optional
+from typing import Annotated, List, TypedDict
 from pathlib import Path
 import pandas as pd
 from langchain_openai import ChatOpenAI
 from urllib.parse import quote
 
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 from langchain_core.messages import SystemMessage, AIMessage, BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.tools import tool
 from langchain_community.document_loaders import DirectoryLoader
 from langchain_community.vectorstores import Chroma
 from langchain_core.embeddings import Embeddings
-from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 from langgraph.graph import StateGraph, END, add_messages
 from langgraph.prebuilt import ToolNode
@@ -24,19 +23,8 @@ from json_parser import parse_posts_from_llm_response
 from config_manager import ConfigManager
 from path_manager import path_manager
 from safe_print import safe_print
-from agent_logger import get_agent_logger, ActionType
 
 load_dotenv()
-
-# Detect hybrid mode
-HYBRID_MODE = os.getenv("CAUSA_MODE", "local").lower() == "hybrid"
-
-# Import bridge only in hybrid mode
-if HYBRID_MODE:
-    from local_bridge import get_bridge, check_helper_connection
-
-# Initialize agent logger
-agent_log = get_agent_logger()
 
 # Initialize configuration manager
 config_manager = ConfigManager()
@@ -60,7 +48,6 @@ class State(TypedDict):
 
 def get_news_for_date(date: str) -> str:
     """Busca noticias para una fecha específica en la web relacionadas con los temas del colectivo."""
-    agent_log.start_action(ActionType.SEARCH_NEWS, f"Searching news for date {date}")
     try:
         # Temas relevantes para el colectivo (configurables)
         temas_colectivo = config_manager.get_setting('collective_topics',
@@ -97,7 +84,6 @@ def get_news_for_date(date: str) -> str:
                 results = list(ddgs.news(fallback_query, max_results=5, region="co-es"))
 
         if not results:
-            agent_log.end_action(ActionType.SEARCH_NEWS, "No news found", {"query": query}, success=True)
             return f"No se encontraron noticias para la fecha consultada ({search_date.strftime('%Y-%m-%d')})."
 
         formatted_results = f"Noticias encontradas para la fecha {search_date.strftime('%Y-%m-%d')}:\n"
@@ -105,20 +91,13 @@ def get_news_for_date(date: str) -> str:
             # DuckDuckGo news format: {'title', 'body', 'url', 'date', 'source'}
             formatted_results += f"- {r.get('title', '')}: {r.get('body', '')} (Fuente: {r.get('source', 'N/A')})\n"
 
-        agent_log.end_action(ActionType.SEARCH_NEWS, f"Found {len(results)} news articles", {
-            "query": query,
-            "results_count": len(results),
-            "sources": [r.get('source', 'N/A') for r in results]
-        })
         return formatted_results
     except Exception as e:
-        agent_log.end_action(ActionType.SEARCH_NEWS, "News search failed", error=str(e), success=False)
         safe_print(f"Error buscando noticias: {str(e)}")
         return "Error al buscar noticias."
 
 def get_ephemerides(date: str) -> str:
     """Busca efemérides para una fecha específica en la web relacionadas con los temas del colectivo."""
-    agent_log.start_action(ActionType.SEARCH_EPHEMERIDES, f"Searching ephemerides for date {date}")
     try:
         date_obj = datetime.strptime(date, "%Y-%m-%d")
         meses = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"]
@@ -143,7 +122,6 @@ def get_ephemerides(date: str) -> str:
                 results = list(ddgs.text(fallback_query, max_results=5, region="co-es"))
 
         if not results:
-            agent_log.end_action(ActionType.SEARCH_EPHEMERIDES, "No ephemerides found", {"query": query})
             return "No se encontraron efemérides para hoy."
 
         formatted_results = "Efemérides encontradas para hoy:\n"
@@ -151,13 +129,8 @@ def get_ephemerides(date: str) -> str:
             # DuckDuckGo text format: {'title', 'body', 'href'}
             formatted_results += f"- {r.get('title', '')}: {r.get('body', '')}\n"
 
-        agent_log.end_action(ActionType.SEARCH_EPHEMERIDES, f"Found {len(results)} ephemerides", {
-            "query": query,
-            "results_count": len(results)
-        })
         return formatted_results
     except Exception as e:
-        agent_log.end_action(ActionType.SEARCH_EPHEMERIDES, "Ephemerides search failed", error=str(e), success=False)
         safe_print(f"Error buscando efemérides: {str(e)}")
         return "Error al buscar efemérides."
 
@@ -197,104 +170,39 @@ class ContentGenerator:
 
     def _load_memory(self) -> Chroma:
         """Carga los documentos de memoria y crea una base de datos vectorial"""
-        agent_log.start_action(ActionType.LOAD_MEMORY, "Loading memory documents")
         documents = []
+        memory_path = path_manager.get_path('memory')
 
-        if HYBRID_MODE:
-            # HYBRID MODE: Fetch documents from Local Helper
-            safe_print("🌐 Modo híbrido: Obteniendo documentos desde Local Helper...")
-            agent_log.log(ActionType.BRIDGE_CALL, "Connecting to Local Helper")
+        # Función auxiliar para cargar un archivo
+        def load_file(file_path: Path):
             try:
-                bridge = get_bridge()
-                if not bridge.check_connection():
-                    safe_print("⚠️ Local Helper no conectado. Usando documentos vacíos.")
-                    agent_log.log(ActionType.BRIDGE_CALL, "Local Helper not connected", success=False)
-                    # Create empty vectorstore with placeholder
-                    placeholder = Document(
-                        page_content="No hay documentos de memoria disponibles. Conecte el Local Helper.",
-                        metadata={"source": "placeholder"}
-                    )
-                    return Chroma.from_documents([placeholder], self.embeddings)
-
-                # Get pre-extracted content from Local Helper
-                memory_docs = bridge.get_all_memory_content()
-                agent_log.log(ActionType.BRIDGE_CALL, f"Received {len(memory_docs)} documents from Local Helper")
-
-                for doc_data in memory_docs:
-                    content = doc_data.get('content', '')
-                    filename = doc_data.get('filename', 'unknown')
-
-                    if content and not doc_data.get('error'):
-                        doc = Document(
-                            page_content=content,
-                            metadata={
-                                'source': filename,
-                                'type': doc_data.get('type', 'text')
-                            }
-                        )
-                        documents.append(doc)
-                        safe_print(f"✓ Documento cargado desde Helper: {filename}")
-
-                if not documents:
-                    safe_print("⚠️ No se encontraron documentos en Local Helper.")
-                    agent_log.end_action(ActionType.LOAD_MEMORY, "No documents in Local Helper", success=True)
-                    placeholder = Document(
-                        page_content="No hay documentos de memoria. Suba archivos PDF o TXT al Local Helper.",
-                        metadata={"source": "placeholder"}
-                    )
-                    return Chroma.from_documents([placeholder], self.embeddings)
-
+                if file_path.suffix.lower() == '.pdf':
+                    loader = PyPDFLoader(str(file_path))
+                else:
+                    loader = TextLoader(str(file_path))
+                return loader.load()
             except Exception as e:
-                safe_print(f"✗ Error conectando con Local Helper: {str(e)}")
-                agent_log.end_action(ActionType.LOAD_MEMORY, "Failed to load from Local Helper", error=str(e), success=False)
-                placeholder = Document(
-                    page_content=f"Error de conexión con Local Helper: {str(e)}",
-                    metadata={"source": "error"}
-                )
-                return Chroma.from_documents([placeholder], self.embeddings)
-        else:
-            # LOCAL MODE: Read from filesystem directly
-            memory_path = path_manager.get_path('memory')
-            agent_log.log(ActionType.LOAD_MEMORY, f"Loading from local path: {memory_path}")
+                safe_print(f"Error al cargar {file_path}: {str(e)}")
+                return []
 
-            # Función auxiliar para cargar un archivo
-            def load_file(file_path: Path):
-                try:
-                    if file_path.suffix.lower() == '.pdf':
-                        loader = PyPDFLoader(str(file_path))
-                    else:
-                        loader = TextLoader(str(file_path))
-                    return loader.load()
-                except Exception as e:
-                    safe_print(f"Error al cargar {file_path}: {str(e)}")
-                    return []
+        # Cargar todos los archivos soportados
+        for ext in ["*.txt", "*.pdf"]:
+            for file_path in memory_path.glob(ext):
+                docs = load_file(file_path)
+                if docs:
+                    documents.extend(docs)
+                    safe_print(f"Archivo cargado exitosamente: {file_path}")
 
-            # Cargar todos los archivos soportados
-            for ext in ["*.txt", "*.pdf"]:
-                for file_path in memory_path.glob(ext):
-                    docs = load_file(file_path)
-                    if docs:
-                        documents.extend(docs)
-                        safe_print(f"Archivo cargado exitosamente: {file_path}")
-
-            if not documents:
-                agent_log.end_action(ActionType.LOAD_MEMORY, "No documents found", success=False)
-                raise ValueError("No se encontraron documentos válidos en la carpeta memory/")
+        if not documents:
+            raise ValueError("No se encontraron documentos válidos en la carpeta memory/")
 
         safe_print(f"Total de documentos cargados: {len(documents)}")
-        agent_log.end_action(ActionType.LOAD_MEMORY, f"Loaded {len(documents)} documents", {
-            "document_count": len(documents),
-            "mode": "hybrid" if HYBRID_MODE else "local"
-        })
         return Chroma.from_documents(documents, self.embeddings)
 
     def generate_content_plan(self, state: State, posts_per_day: int = 3) -> dict:
-        agent_log.start_action(ActionType.GENERATE_CONTENT, f"Generating content plan for {state['current_date']}")
-
         context = self.memory_db.similarity_search(
             "temas principales del colectivo", k=3
         )
-        agent_log.log(ActionType.GENERATE_CONTENT, f"Retrieved {len(context)} context documents from memory")
 
         # Obtener efemérides y noticias
         ephemerides = get_ephemerides(state["current_date"])
@@ -389,19 +297,8 @@ El colectivo se enfoca en: medio ambiente, animalismo, derechos humanos, urbanis
         if isinstance(content, list):
             content = "\n".join(str(item) for item in content)
 
-        agent_log.log(ActionType.API_CALL, "LLM content generation completed", {
-            "model": "gpt-5-nano",
-            "response_length": len(content)
-        })
-
-        posts = self._parse_response(content)
-        agent_log.end_action(ActionType.GENERATE_CONTENT, f"Generated {len(posts)} posts", {
-            "posts_count": len(posts),
-            "date": state["current_date"]
-        })
-
         return {
-            "posts": posts,
+            "posts": self._parse_response(content),
             "messages": [AIMessage(content=response.content)]
         }
 

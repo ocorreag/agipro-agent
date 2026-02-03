@@ -111,7 +111,7 @@ class PublicationEditor:
                 col1, col2 = st.columns([0.05, 0.95])
 
                 with col1:
-                    if st.checkbox("Select", key=f"select_{post['titulo']}_{post['fecha']}", label_visibility="collapsed"):
+                    if st.checkbox("", key=f"select_{post['titulo']}_{post['fecha']}", label_visibility="collapsed"):
                         selected_posts.append(post)
 
                 with col2:

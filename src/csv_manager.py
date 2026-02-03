@@ -58,7 +58,7 @@ class PostManager:
         return settings.get(key, default)
 
     def save_draft_posts(self, posts: List[Dict], date: str = None) -> str:
-        """Save new posts as drafts for a specific date (appends to existing file)"""
+        """Save new posts as drafts for a specific date"""
         if not date:
             date = datetime.now().strftime('%Y-%m-%d')
 
@@ -70,39 +70,17 @@ class PostManager:
             post['created_at'] = datetime.now().isoformat()
             post['image_path'] = ''
 
-        new_df = pd.DataFrame(posts)
+        df = pd.DataFrame(posts)
 
         # Ensure columns are in correct order
         columns = ['fecha', 'titulo', 'imagen', 'descripcion', 'status', 'created_at', 'image_path']
-        new_df = new_df.reindex(columns=columns, fill_value='')
+        df = df.reindex(columns=columns, fill_value='')
 
         # Ensure image_path column is string type from the start
-        new_df['image_path'] = new_df['image_path'].astype('str')
+        df['image_path'] = df['image_path'].astype('str')
 
-        # If file exists, append to it instead of overwriting
-        if draft_file.exists():
-            try:
-                existing_df = pd.read_csv(draft_file, encoding='utf-8')
-                existing_df = existing_df.fillna('')
-
-                # Check for duplicates by titulo to avoid saving the same post twice
-                existing_titles = set(existing_df['titulo'].tolist())
-                new_posts_to_add = new_df[~new_df['titulo'].isin(existing_titles)]
-
-                if len(new_posts_to_add) > 0:
-                    combined_df = pd.concat([existing_df, new_posts_to_add], ignore_index=True)
-                    combined_df['image_path'] = combined_df['image_path'].astype('str')
-                    combined_df.to_csv(draft_file, index=False, encoding='utf-8')
-                    safe_print(f"✓ {len(new_posts_to_add)} posts añadidos a: {draft_file} (total: {len(combined_df)})")
-                else:
-                    safe_print(f"⚠️ Posts ya existen en: {draft_file}, no se añadieron duplicados")
-            except Exception as e:
-                # If error reading existing file, overwrite it
-                safe_print(f"⚠️ Error leyendo archivo existente, sobrescribiendo: {e}")
-                new_df.to_csv(draft_file, index=False, encoding='utf-8')
-        else:
-            new_df.to_csv(draft_file, index=False, encoding='utf-8')
-            safe_print(f"✓ {len(posts)} posts guardados como borradores en: {draft_file}")
+        df.to_csv(draft_file, index=False, encoding='utf-8')
+        safe_print(f"✓ {len(posts)} posts guardados como borradores en: {draft_file}")
 
         return str(draft_file)
 

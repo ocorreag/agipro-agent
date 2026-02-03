@@ -15,13 +15,6 @@ from safe_print import safe_print
 
 load_dotenv()
 
-# Detect hybrid mode
-HYBRID_MODE = os.getenv("CAUSA_MODE", "local").lower() == "hybrid"
-
-# Import bridge only in hybrid mode
-if HYBRID_MODE:
-    from local_bridge import get_bridge
-
 class SocialMediaImageGenerator:
     def __init__(self):
         self.client = OpenAI()
@@ -40,53 +33,6 @@ class SocialMediaImageGenerator:
             'compositions': []
         }
 
-        if HYBRID_MODE:
-            # HYBRID MODE: Fetch brand images from Local Helper
-            safe_print("🌐 Modo híbrido: Obteniendo imágenes de marca desde Local Helper...")
-            try:
-                bridge = get_bridge()
-                if not bridge.check_connection():
-                    safe_print("⚠️ Local Helper no conectado. Sin imágenes de marca.")
-                    return style_info
-
-                # Get list of brand images
-                lg_files = bridge.get_linea_grafica()
-
-                if not lg_files:
-                    safe_print("⚠️ No se encontraron imágenes en linea_grafica (Local Helper)")
-                    return style_info
-
-                for file_info in lg_files:
-                    filename = file_info.get('name', '')
-                    if not filename.lower().endswith(('.jpg', '.jpeg', '.png')):
-                        continue
-
-                    safe_print(f"Analizando imagen desde Helper: {filename}")
-
-                    # Get image content from Local Helper
-                    img_data = bridge.get_linea_grafica_image(filename)
-                    if img_data:
-                        img = Image.open(BytesIO(img_data))
-
-                        # Extraer colores dominantes
-                        colors = self._get_dominant_colors(img)
-                        style_info['colors'].extend(colors)
-
-                        # Analizar composición
-                        composition = self._analyze_composition(img)
-                        style_info['compositions'].append(composition)
-
-                if style_info['compositions']:
-                    safe_print(f"✓ Analizadas {len(style_info['compositions'])} imágenes de línea gráfica desde Helper")
-                    if style_info['colors']:
-                        safe_print(f"Colores dominantes encontrados: {', '.join(style_info['colors'][:5])}")
-
-            except Exception as e:
-                safe_print(f"✗ Error obteniendo imágenes desde Local Helper: {str(e)}")
-
-            return style_info
-
-        # LOCAL MODE: Read from filesystem directly
         style_dir = path_manager.get_path('linea_grafica')
         if not style_dir.exists():
             safe_print("⚠️ Carpeta linea_grafica no encontrada")
