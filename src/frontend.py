@@ -496,7 +496,7 @@ def show_file_management():
                 with cols[i % 3]:
                     try:
                         img = Image.open(image_path)
-                        st.image(img, caption=image_path.name, use_column_width=True)
+                        st.image(img, caption=image_path.name, width="stretch")
 
                         col_a, col_b = st.columns(2)
                         with col_a:
@@ -778,7 +778,7 @@ def show_draft_posts(pm):
                 with st.expander("🖼️ Vista Previa de Imagen", expanded=False):
                     try:
                         img = Image.open(draft['image_path'])
-                        st.image(img, caption="Imagen generada", use_column_width=True)
+                        st.image(img, caption="Imagen generada", width="stretch")
                     except Exception as e:
                         st.error(f"Error cargando imagen: {e}")
 
@@ -854,7 +854,7 @@ def show_post_preview(draft):
         st.markdown("**🖼️ Imagen generada:**")
         try:
             img = Image.open(draft['image_path'])
-            st.image(img, use_column_width=True)
+            st.image(img, width="stretch")
         except Exception as e:
             st.error(f"Error cargando imagen: {e}")
 

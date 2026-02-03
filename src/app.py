@@ -561,7 +561,7 @@ class CausaApp:
             col1, col2 = st.columns([0.1, 0.9])
 
             with col1:
-                if st.checkbox("", key=f"memory_{file_info['name']}", label_visibility="collapsed"):
+                if st.checkbox("Select", key=f"memory_{file_info['name']}", label_visibility="collapsed"):
                     selected_files.append(file_info['path'])
 
             with col2:
@@ -671,7 +671,7 @@ class CausaApp:
                 # Show image preview
                 try:
                     image = Image.open(image_info['path'])
-                    st.image(image, use_column_width=True)
+                    st.image(image, width="stretch")
                 except Exception as e:
                     st.error(f"Error loading image: {e}")
 
