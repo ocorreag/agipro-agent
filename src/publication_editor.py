@@ -73,7 +73,7 @@ class PublicationEditor:
         with col3:
             sort_order = st.radio(
                 "Orden:",
-                ["Ascendente", "Descendente"],
+                ["Descendente", "Ascendente"],
                 key="sort_order",
                 horizontal=True
             )
@@ -92,7 +92,7 @@ class PublicationEditor:
         }
 
         sort_column = sort_column_map[sort_by]
-        ascending = sort_order == "Ascendente"
+        ascending = sort_order != "Descendente"  # Descendente is now the default
 
         filtered_df = filtered_df.sort_values(sort_column, ascending=ascending)
 

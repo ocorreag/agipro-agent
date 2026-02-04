@@ -12,7 +12,7 @@ This is **agipro-agent**, a Python-based social media content generation system 
 
 - **`main.py`**: Orchestration script that runs the complete pipeline - content generation, image creation, and local file management
 - **`agent.py`**: LangGraph-based AI agent system using OpenAI LLM that generates contextualized social media content based on news, ephemerides, and collective activities
-- **`images.py`**: OpenAI DALL-E 3 integration for generating social media images with brand consistency
+- **`images.py`**: OpenAI GPT-Image-1 integration for generating social media images using línea gráfica as visual style references
 - **`csv_manager.py`**: Local file management system using CSV files and JSON configuration
 
 ### Data Flow
@@ -20,7 +20,7 @@ This is **agipro-agent**, a Python-based social media content generation system 
 1. **Content Generation**: Agent searches for current news and ephemerides, combines with collective's memory documents
 2. **Content Review**: Second AI pass validates and corrects generated content
 3. **Draft Storage**: Posts saved as CSV files in `publicaciones/drafts/posts_YYYY-MM-DD.csv`
-4. **Image Generation**: DALL-E 3 creates branded images based on content descriptions
+4. **Image Generation**: GPT-Image-1 creates branded images using línea gráfica images as visual style references
 5. **Local Management**: All data stored locally for frontend review and publishing
 
 ### Directory Structure
@@ -89,11 +89,43 @@ Requirements are managed in `src/requirements.txt`. Key dependencies:
 - **Usage**: Both ContentGenerator and ContentReviewer classes use this configuration
 
 ### Image Generation Configuration
-- **Size**: `1024x1024px` (1:1 square format - universal for all social media, DALL-E 3 compatible)
+- **Default Size**: `1024x1536px` (2:3 portrait - best engagement on Instagram/Facebook)
 - **Quality**: High
-- **Model**: gpt-image-1 (DALL-E 3)
+- **Model**: gpt-image-1 (GPT-Image-1)
+- **Method**: Uses `/v1/images/edit` endpoint with línea gráfica images as visual references
+- **Input Fidelity**: High (closely matches reference style)
 - **Format**: Single image per post (replaces separate Instagram/Facebook images)
-- **Compatibility**: Works across Instagram, Facebook, Twitter, LinkedIn, WhatsApp, Telegram
+
+#### Available Image Sizes
+The agent can choose the optimal size based on content:
+
+| Size | Aspect Ratio | Best For | Token Cost (High) |
+|------|-------------|----------|-------------------|
+| `1024x1536` | 2:3 portrait | Instagram/Facebook feeds, people, events | 6240 tokens |
+| `1024x1024` | 1:1 square | Twitter, LinkedIn, universal, logos | 4160 tokens |
+| `1536x1024` | 3:2 landscape | Banners, panoramas, group photos | 6208 tokens |
+| `auto` | Model decides | When unsure | Varies |
+
+#### Agent Size Selection Guide
+The agent uses this guidance to select sizes:
+- **Portrait (1024x1536)**: People, events, vertical scenes, nature with trees, buildings
+- **Square (1024x1024)**: Logos, icons, balanced subjects, profile-style images
+- **Landscape (1536x1024)**: Panoramas, groups, wide scenes, banners, headers
+
+#### Visual Style Reference System
+The image generation uses the edit endpoint instead of generate, passing brand images as references:
+```python
+# Up to 5 images from linea_grafica/ are sent as visual style references
+client.images.edit(
+    model="gpt-image-1",
+    image=[open(img, "rb") for img in style_images],  # Reference images
+    prompt=enhanced_prompt,
+    size="1024x1536",  # Agent can override based on content
+    quality="high",
+    input_fidelity="high"  # Match reference style closely
+)
+```
+This ensures consistent brand aesthetics across all generated images.
 
 ## Configuration
 
@@ -184,8 +216,9 @@ response = chat(agent, "Create a post about climate action")
 | `get_activities` | Confirmed activities | (none) |
 | `read_past_publications` | Recent posts history | days_back, include_published |
 | `save_draft_post` | Save individual post | fecha, titulo, imagen, descripcion |
-| `generate_image` | DALL-E 3 generation | titulo, imagen_description, fecha |
-| `preview_image_prompt` | Preview DALL-E prompt | titulo, imagen_description |
+| `generate_image` | GPT-Image-1 generation | titulo, imagen_description, fecha, size |
+| `regenerate_image` | Regenerate with changes | titulo, imagen_description_original, cambios, fecha, size |
+| `preview_image_prompt` | Preview image prompt | titulo, imagen_description, size |
 
 ### Agent Workflow Example
 

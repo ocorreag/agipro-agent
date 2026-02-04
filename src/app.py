@@ -17,9 +17,16 @@ from config_manager import ConfigManager
 from file_manager import FileManager
 from publication_editor import PublicationEditor
 from csv_manager import PostManager
-from path_manager import setup_environment
+from path_manager import setup_environment, path_manager
 import agent
 import images
+
+# Import agent logger functions
+try:
+    from agent_logger import get_recent_logs, get_log_files, clear_old_logs
+    _logger_available = True
+except ImportError:
+    _logger_available = False
 
 # Lazy import for chat interface to handle potential dependency issues
 _chat_interface_available = None
@@ -701,7 +708,7 @@ class CausaApp:
         st.title("⚙️ Configuración")
 
         # Configuration tabs
-        tab1, tab2, tab3, tab4 = st.tabs(["🔑 API Keys", "📋 General", "💬 Prompts", "📊 Google Sheets"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["🔑 API Keys", "📋 General", "💬 Prompts", "📊 Google Sheets", "📜 Logs"])
 
         with tab1:
             self._show_api_config()
@@ -714,6 +721,9 @@ class CausaApp:
 
         with tab4:
             self._show_sheets_config()
+
+        with tab5:
+            self._show_logs_viewer()
 
     def _show_api_config(self):
         """Show API keys configuration"""
@@ -920,6 +930,92 @@ class CausaApp:
         # Test connection
         if sheet_id and st.button("🧪 Probar Conexión"):
             st.info("Funcionalidad de prueba en desarrollo")
+
+    def _show_logs_viewer(self):
+        """Show agent logs viewer"""
+        st.subheader("📜 Logs del Agente")
+        st.write("Visualiza los movimientos y acciones del agente de IA.")
+
+        if not _logger_available:
+            st.warning("⚠️ El módulo de logging no está disponible.")
+            return
+
+        # Controls
+        col1, col2, col3 = st.columns([2, 1, 1])
+
+        with col1:
+            # Select log file
+            log_files = get_log_files()
+            if log_files:
+                selected_file = st.selectbox(
+                    "📁 Archivo de log:",
+                    options=log_files,
+                    index=0,
+                    help="Selecciona un archivo de log para visualizar"
+                )
+            else:
+                st.info("No hay archivos de log disponibles aún.")
+                return
+
+        with col2:
+            lines_to_show = st.number_input(
+                "📏 Líneas a mostrar:",
+                min_value=50,
+                max_value=1000,
+                value=200,
+                step=50
+            )
+
+        with col3:
+            if st.button("🔄 Refrescar", type="secondary"):
+                st.rerun()
+
+        # Show logs
+        st.divider()
+
+        try:
+            logs_dir = path_manager.get_path('publicaciones') / 'logs'
+            log_file_path = logs_dir / selected_file
+
+            if log_file_path.exists():
+                with open(log_file_path, 'r', encoding='utf-8') as f:
+                    all_lines = f.readlines()
+                    recent_lines = all_lines[-lines_to_show:] if len(all_lines) > lines_to_show else all_lines
+                    log_content = "".join(recent_lines)
+
+                # Display in a code block for better formatting
+                st.code(log_content, language="text")
+
+                # Stats
+                st.caption(f"Mostrando {len(recent_lines)} de {len(all_lines)} líneas totales")
+            else:
+                st.warning("El archivo de log seleccionado no existe.")
+
+        except Exception as e:
+            st.error(f"Error leyendo logs: {e}")
+
+        # Cleanup option
+        st.divider()
+        st.subheader("🧹 Mantenimiento")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            days_to_keep = st.number_input(
+                "Días de logs a mantener:",
+                min_value=1,
+                max_value=30,
+                value=7
+            )
+
+        with col2:
+            if st.button("🗑️ Limpiar logs antiguos", type="secondary"):
+                try:
+                    clear_old_logs(days_to_keep)
+                    st.success(f"✅ Logs con más de {days_to_keep} días eliminados")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error limpiando logs: {e}")
 
 
 def main():

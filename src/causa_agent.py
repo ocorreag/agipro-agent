@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, BaseMessage, ToolMessage
 from langgraph.graph import StateGraph, END, add_messages
 from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.memory import MemorySaver
@@ -22,6 +22,11 @@ from dotenv import load_dotenv
 from tools import ALL_TOOLS, WRITE_TOOLS
 from path_manager import setup_environment
 from safe_print import safe_print
+from agent_logger import (
+    log_agent_start, log_user_message, log_tool_call, log_tool_result,
+    log_agent_response, log_agent_decision, log_error, log_conversation_end,
+    get_logger
+)
 
 load_dotenv()
 
@@ -165,6 +170,7 @@ def create_causa_agent(model_name: str = "gpt-5.2"):
     Returns:
         A compiled LangGraph that can be invoked with messages.
     """
+    logger = get_logger()
 
     # Create the LLM with tools bound
     llm = ChatOpenAI(
@@ -193,6 +199,18 @@ def create_causa_agent(model_name: str = "gpt-5.2"):
         # Get response from LLM
         response = llm_with_tools.invoke(messages)
 
+        # Log tool calls if any
+        if hasattr(response, "tool_calls") and response.tool_calls:
+            for tool_call in response.tool_calls:
+                log_tool_call(
+                    tool_name=tool_call.get("name", "unknown"),
+                    arguments=tool_call.get("args", {})
+                )
+
+        # Log agent response if it has content
+        if response.content:
+            log_agent_response(response.content)
+
         return {"messages": [response]}
 
     def should_continue(state: AgentState) -> Literal["tools", "end"]:
@@ -204,10 +222,32 @@ def create_causa_agent(model_name: str = "gpt-5.2"):
 
         # If the LLM made tool calls, continue to tool node
         if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            tool_names = [tc.get("name", "unknown") for tc in last_message.tool_calls]
+            log_agent_decision("CONTINUE", f"Calling tools: {', '.join(tool_names)}")
             return "tools"
 
         # Otherwise, end the turn (wait for user input)
+        log_agent_decision("END", "Waiting for user input")
         return "end"
+
+    def tools_node_with_logging(state: AgentState) -> dict:
+        """
+        Custom tools node that logs tool results.
+        """
+        tool_node = ToolNode(ALL_TOOLS)
+        result = tool_node.invoke(state)
+
+        # Log tool results
+        if "messages" in result:
+            for msg in result["messages"]:
+                if isinstance(msg, ToolMessage):
+                    log_tool_result(
+                        tool_name=msg.name if hasattr(msg, 'name') else "unknown",
+                        result=msg.content,
+                        success=True
+                    )
+
+        return result
 
     # ========================================================================
     # Build the Graph
@@ -217,7 +257,7 @@ def create_causa_agent(model_name: str = "gpt-5.2"):
 
     # Add nodes
     workflow.add_node("agent", agent_node)
-    workflow.add_node("tools", ToolNode(ALL_TOOLS))
+    workflow.add_node("tools", tools_node_with_logging)
 
     # Set entry point
     workflow.set_entry_point("agent")
@@ -239,6 +279,9 @@ def create_causa_agent(model_name: str = "gpt-5.2"):
     memory = MemorySaver()
     agent = workflow.compile(checkpointer=memory)
 
+    # Store model name for logging
+    agent._model_name = model_name
+
     return agent
 
 
@@ -258,19 +301,32 @@ def chat(agent, message: str, thread_id: str = "default") -> str:
     Returns:
         The agent's response text
     """
+    # Log conversation start
+    model_name = getattr(agent, '_model_name', 'unknown')
+    log_agent_start(thread_id, model_name)
+    log_user_message(message, thread_id)
+
     config = {"configurable": {"thread_id": thread_id}}
 
-    result = agent.invoke(
-        {"messages": [HumanMessage(content=message)]},
-        config=config
-    )
+    try:
+        result = agent.invoke(
+            {"messages": [HumanMessage(content=message)]},
+            config=config
+        )
 
-    # Get the last AI message
-    for msg in reversed(result["messages"]):
-        if isinstance(msg, AIMessage):
-            return msg.content
+        # Get the last AI message
+        for msg in reversed(result["messages"]):
+            if isinstance(msg, AIMessage):
+                log_conversation_end(thread_id)
+                return msg.content
 
-    return "No response generated."
+        log_conversation_end(thread_id)
+        return "No response generated."
+
+    except Exception as e:
+        log_error(str(e), "chat")
+        log_conversation_end(thread_id)
+        raise
 
 
 def stream_chat(agent, message: str, thread_id: str = "default"):
@@ -285,17 +341,35 @@ def stream_chat(agent, message: str, thread_id: str = "default"):
     Yields:
         Chunks of the response as they're generated
     """
-    config = {"configurable": {"thread_id": thread_id}}
+    # Log conversation start
+    model_name = getattr(agent, '_model_name', 'unknown')
+    log_agent_start(thread_id, model_name)
+    log_user_message(message, thread_id)
 
-    for event in agent.stream(
-        {"messages": [HumanMessage(content=message)]},
-        config=config,
-        stream_mode="values"
-    ):
-        if "messages" in event:
-            last_msg = event["messages"][-1]
-            if isinstance(last_msg, AIMessage) and last_msg.content:
-                yield last_msg.content
+    config = {"configurable": {"thread_id": thread_id}}
+    final_response = ""
+
+    try:
+        for event in agent.stream(
+            {"messages": [HumanMessage(content=message)]},
+            config=config,
+            stream_mode="values"
+        ):
+            if "messages" in event:
+                last_msg = event["messages"][-1]
+                if isinstance(last_msg, AIMessage) and last_msg.content:
+                    final_response = last_msg.content
+                    yield last_msg.content
+
+        # Log the final response
+        if final_response:
+            log_agent_response(final_response)
+        log_conversation_end(thread_id)
+
+    except Exception as e:
+        log_error(str(e), "stream_chat")
+        log_conversation_end(thread_id)
+        raise
 
 
 def get_conversation_history(agent, thread_id: str = "default") -> List[dict]:

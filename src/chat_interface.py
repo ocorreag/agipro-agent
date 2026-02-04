@@ -161,35 +161,31 @@ def process_user_message(user_input: str):
         "content": user_input
     })
 
-    # Display user message
-    render_message("user", user_input)
+    # Get agent response (don't render inline - will be rendered after rerun via history)
+    # Show a status message while processing
+    with st.status("🤔 Pensando...", expanded=True) as status:
+        try:
+            st.write("Procesando tu mensaje...")
+            response = chat(
+                st.session_state.chat_agent,
+                user_input,
+                st.session_state.chat_thread_id
+            )
 
-    # Get agent response
-    with st.chat_message("assistant", avatar="🌱"):
-        with st.spinner("Pensando..."):
-            try:
-                response = chat(
-                    st.session_state.chat_agent,
-                    user_input,
-                    st.session_state.chat_thread_id
-                )
+            # Add to history (will be displayed after rerun)
+            st.session_state.chat_messages.append({
+                "role": "assistant",
+                "content": response
+            })
 
-                # Display response with image previews
-                render_message_with_images(response)
+            status.update(label="✅ Respuesta lista", state="complete")
 
-                # Add to history
-                st.session_state.chat_messages.append({
-                    "role": "assistant",
-                    "content": response
-                })
-
-            except Exception as e:
-                error_msg = f"Error: {str(e)}"
-                st.error(error_msg)
-                st.session_state.chat_messages.append({
-                    "role": "assistant",
-                    "content": f"Lo siento, ocurrió un error: {str(e)}"
-                })
+        except Exception as e:
+            st.session_state.chat_messages.append({
+                "role": "assistant",
+                "content": f"Lo siento, ocurrió un error: {str(e)}"
+            })
+            status.update(label="❌ Error", state="error")
 
 
 # ============================================================================

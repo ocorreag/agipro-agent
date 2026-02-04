@@ -18,13 +18,50 @@ load_dotenv()
 class SocialMediaImageGenerator:
     def __init__(self):
         self.client = OpenAI()
-        # Universal size that works across all social media platforms
-        self.universal_size = "1024x1024"  # 1:1 square format - most versatile and DALL-E 3 compatible
+        # Default size - portrait performs best on Instagram/Facebook feeds
+        self.default_size = "1024x1536"  # 2:3 portrait format - best engagement
         self.output_dir = path_manager.get_path('imagenes')
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Analizar imágenes de línea gráfica
+        # Load línea gráfica images as references
+        self.style_images = self._load_style_images()
+        # Also analyze for color palette (fallback for text description)
         self.style_guide = self._analyze_style_guide()
+
+    def _load_style_images(self):
+        """Load línea gráfica images as reference files for the edit endpoint."""
+        style_images = []
+        style_dir = path_manager.get_path('linea_grafica')
+
+        if not style_dir.exists():
+            safe_print("⚠️ Carpeta linea_grafica no encontrada")
+            return style_images
+
+        try:
+            image_patterns = ['*.jpg', '*.jpeg', '*.png', '*.JPG', '*.JPEG', '*.PNG']
+            image_files = []
+            for pattern in image_patterns:
+                image_files.extend(style_dir.glob(pattern))
+
+            if not image_files:
+                safe_print("⚠️ No se encontraron imágenes en la carpeta linea_grafica")
+                return style_images
+
+            # Limit to 5 reference images (API supports up to 16, but we want efficiency)
+            for img_path in sorted(image_files)[:5]:
+                # Verify the image is valid and under 50MB
+                if img_path.stat().st_size < 50 * 1024 * 1024:
+                    style_images.append(str(img_path))
+                    safe_print(f"✓ Imagen de referencia cargada: {img_path.name}")
+                else:
+                    safe_print(f"⚠️ Imagen muy grande (>50MB), omitida: {img_path.name}")
+
+            safe_print(f"✓ {len(style_images)} imágenes de línea gráfica listas como referencia")
+
+        except Exception as e:
+            safe_print(f"✗ Error cargando imágenes de referencia: {str(e)}")
+
+        return style_images
 
     def _analyze_style_guide(self):
         """Analiza las imágenes en la carpeta linea_grafica para extraer información de estilo"""
@@ -35,7 +72,6 @@ class SocialMediaImageGenerator:
 
         style_dir = path_manager.get_path('linea_grafica')
         if not style_dir.exists():
-            safe_print("⚠️ Carpeta linea_grafica no encontrada")
             return style_info
 
         try:
@@ -46,11 +82,9 @@ class SocialMediaImageGenerator:
                 image_files.extend(style_dir.glob(pattern))
 
             if not image_files:
-                safe_print("⚠️ No se encontraron imágenes en la carpeta linea_grafica")
                 return style_info
 
             for img_path in image_files:
-                safe_print(f"Analizando imagen: {img_path.name}")
                 img = Image.open(img_path)
 
                 # Extraer colores dominantes
@@ -60,9 +94,6 @@ class SocialMediaImageGenerator:
                 # Analizar composición
                 composition = self._analyze_composition(img)
                 style_info['compositions'].append(composition)
-
-            safe_print(f"✓ Analizadas {len(style_info['compositions'])} imágenes de línea gráfica")
-            safe_print(f"Colores dominantes encontrados: {', '.join(style_info['colors'][:5])}")
 
         except Exception as e:
             safe_print(f"✗ Error analizando línea gráfica: {str(e)}")
@@ -108,38 +139,83 @@ class SocialMediaImageGenerator:
             'size': (width, height)
         }
 
-    def generate_image(self, prompt: str, platform: str, post_date: str, title: str) -> str:
-        """Genera una imagen usando DALL-E 3 con alta calidad y la guarda"""
+    def generate_image(self, prompt: str, platform: str, post_date: str, title: str, size: str = None) -> str:
+        """Genera una imagen usando GPT-Image-1 con imágenes de referencia de línea gráfica.
+
+        Args:
+            prompt: Image description/prompt
+            platform: Target platform (for logging)
+            post_date: Date in YYYY-MM-DD format
+            title: Post title (used for filename)
+            size: Optional size - "1024x1536" (portrait), "1024x1024" (square),
+                  "1536x1024" (landscape), or "auto". Defaults to portrait.
+        """
         try:
-            # Crear prompt con estilo visual
+            # Validate and set size
+            valid_sizes = ["1024x1024", "1024x1536", "1536x1024", "auto"]
+            if size is None or size not in valid_sizes:
+                size = self.default_size
+
+            size_names = {
+                "1024x1536": "portrait",
+                "1024x1024": "square",
+                "1536x1024": "landscape",
+                "auto": "auto"
+            }
+            safe_print(f"📐 Generando imagen en formato {size_names.get(size, size)} ({size})")
+
+            # Build enhanced prompt with style instructions
             style_prompt = self._create_style_prompt()
             enhanced_prompt = f"""{prompt}
 
-            Aplica el siguiente estilo visual:
-            {style_prompt}
-            """
+IMPORTANT: Match the visual style, color palette, and aesthetic of the reference images provided.
+{style_prompt}
+"""
 
-            # Generar imagen
-            response = self.client.images.generate(
-                model="gpt-image-1",
-                prompt=enhanced_prompt,
-                size=self.universal_size,
-                quality="high",
-                n=1
-            )
-            #print(response)
+            # Use edit endpoint with reference images if available
+            if self.style_images:
+                safe_print(f"🎨 Usando {len(self.style_images)} imágenes de referencia de línea gráfica")
+
+                # Open reference images as file objects
+                image_files = [open(img_path, "rb") for img_path in self.style_images]
+
+                try:
+                    response = self.client.images.edit(
+                        model="gpt-image-1",
+                        image=image_files,
+                        prompt=enhanced_prompt,
+                        size=size,
+                        quality="high",
+                        input_fidelity="high",  # Match style closely
+                        n=1
+                    )
+                finally:
+                    # Close all file handles
+                    for f in image_files:
+                        f.close()
+            else:
+                # Fallback to generate endpoint if no reference images
+                safe_print("⚠️ Sin imágenes de referencia, usando generación estándar")
+                response = self.client.images.generate(
+                    model="gpt-image-1",
+                    prompt=enhanced_prompt,
+                    size=size,
+                    quality="high",
+                    n=1
+                )
+
             image_b64 = response.data[0].b64_json
 
             if not image_b64:
                 safe_print(f"✗ Error: No se recibió data de la imagen para {platform}.")
                 return ""
 
-            # Decodificar y guardar imagen
+            # Decode and save image
             image_bytes = base64.b64decode(image_b64)
             img = Image.open(BytesIO(image_bytes))
 
             safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            filename = f"{post_date}_{safe_title[:50]}.png"  # No platform prefix since it's universal
+            filename = f"{post_date}_{safe_title[:50]}.png"
             filepath = self.output_dir / filename
 
             img.save(filepath)
@@ -227,10 +303,11 @@ def generate_single_image(
     titulo: str,
     imagen_description: str,
     fecha: str,
-    style_colors: list = None
+    style_colors: list = None,
+    size: str = "1024x1536"
 ) -> str:
     """
-    Generate a single image using DALL-E 3.
+    Generate a single image using GPT-Image-1 with línea gráfica as reference.
 
     This is a standalone function that can be used by tools or other modules
     without instantiating the full SocialMediaImageGenerator class.
@@ -240,6 +317,8 @@ def generate_single_image(
         imagen_description: Detailed description for the image
         fecha: The post date in YYYY-MM-DD format (used for filename)
         style_colors: Optional list of hex colors for brand consistency
+        size: Image dimensions - "1024x1536" (portrait), "1024x1024" (square),
+              "1536x1024" (landscape), or "auto"
 
     Returns:
         Path to the saved image file, or empty string on error
@@ -249,58 +328,59 @@ def generate_single_image(
         output_dir = path_manager.get_path('imagenes')
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Build style prompt if colors provided
+        # Load línea gráfica images as references
+        style_images = []
+        style_dir = path_manager.get_path('linea_grafica')
+
+        if style_dir.exists():
+            try:
+                image_files = []
+                for pattern in ['*.jpg', '*.jpeg', '*.png', '*.JPG', '*.JPEG', '*.PNG']:
+                    image_files.extend(style_dir.glob(pattern))
+
+                # Limit to 5 reference images
+                for img_path in sorted(image_files)[:5]:
+                    if img_path.stat().st_size < 50 * 1024 * 1024:  # Under 50MB
+                        style_images.append(str(img_path))
+
+                if style_images:
+                    safe_print(f"🎨 Usando {len(style_images)} imágenes de línea gráfica como referencia")
+            except Exception as e:
+                safe_print(f"⚠️ Error cargando imágenes de referencia: {e}")
+
+        # Build style prompt for additional context
         style_prompt = ""
         if style_colors:
             colors_str = ", ".join(style_colors[:5])
-            style_prompt = f"""
-            Use this specific color palette: {colors_str}
-
-            Style characteristics:
-            - Maintain consistency with existing brand identity
-            - Use the corporate colors as dominant tones
-            - Apply a clean, minimalist style
-            - Keep balanced negative space
-            - Use simple geometric shapes where appropriate
-            - Avoid excessive decorative elements
-            """
-        else:
-            # Try to analyze brand images for colors
-            style_dir = path_manager.get_path('linea_grafica')
-            if style_dir.exists():
-                try:
-                    image_files = []
-                    for pattern in ['*.jpg', '*.jpeg', '*.png']:
-                        image_files.extend(style_dir.glob(pattern))
-
-                    if image_files:
-                        colors = []
-                        for img_path in image_files[:3]:
-                            img = Image.open(img_path)
-                            if img.mode != 'RGB':
-                                img = img.convert('RGB')
-                            img.thumbnail((150, 150))
-                            pixels = list(img.getdata())
-                            color_counts = {}
-                            for pixel in pixels:
-                                if pixel in color_counts:
-                                    color_counts[pixel] += 1
-                                else:
-                                    color_counts[pixel] = 1
-                            dominant = sorted(color_counts.items(), key=lambda x: x[1], reverse=True)[:3]
-                            colors.extend(['#{:02x}{:02x}{:02x}'.format(c[0][0], c[0][1], c[0][2]) for c in dominant])
-
-                        if colors:
-                            colors_str = ", ".join(colors[:5])
-                            style_prompt = f"\nUse this brand color palette where appropriate: {colors_str}"
-                except Exception:
-                    pass  # Silent fail on style analysis
+            style_prompt = f"\nUse this specific color palette: {colors_str}"
+        elif style_images:
+            # Extract colors from first reference image
+            try:
+                img = Image.open(style_images[0])
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                img.thumbnail((150, 150))
+                pixels = list(img.getdata())
+                color_counts = {}
+                for pixel in pixels:
+                    if pixel in color_counts:
+                        color_counts[pixel] += 1
+                    else:
+                        color_counts[pixel] = 1
+                dominant = sorted(color_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+                colors = ['#{:02x}{:02x}{:02x}'.format(c[0][0], c[0][1], c[0][2]) for c in dominant]
+                colors_str = ", ".join(colors)
+                style_prompt = f"\nUse this brand color palette: {colors_str}"
+            except Exception:
+                pass
 
         # Build enhanced prompt
         enhanced_prompt = f"""Create a social media image for the following post:
 
 Title: {titulo}
 Image description: {imagen_description}
+
+IMPORTANT: Match the visual style, color palette, and aesthetic of the reference images provided.
 
 Additional requirements:
 - Professional and attractive visual style
@@ -312,19 +392,51 @@ Additional requirements:
 {style_prompt}
 """
 
-        # Generate image
-        response = client.images.generate(
-            model="gpt-image-1",
-            prompt=enhanced_prompt,
-            size="1024x1024",  # Universal square format
-            quality="high",
-            n=1
-        )
+        # Validate and set size
+        valid_sizes = ["1024x1024", "1024x1536", "1536x1024", "auto"]
+        if size not in valid_sizes:
+            size = "1024x1536"  # Default to portrait
+
+        size_names = {
+            "1024x1536": "portrait",
+            "1024x1024": "square",
+            "1536x1024": "landscape",
+            "auto": "auto"
+        }
+        safe_print(f"📐 Generando imagen en formato {size_names.get(size, size)} ({size})")
+
+        # Use edit endpoint with reference images if available
+        if style_images:
+            image_files = [open(img_path, "rb") for img_path in style_images]
+
+            try:
+                response = client.images.edit(
+                    model="gpt-image-1",
+                    image=image_files,
+                    prompt=enhanced_prompt,
+                    size=size,
+                    quality="high",
+                    input_fidelity="high",  # Match style closely
+                    n=1
+                )
+            finally:
+                for f in image_files:
+                    f.close()
+        else:
+            # Fallback to generate endpoint if no reference images
+            safe_print("⚠️ Sin imágenes de referencia, usando generación estándar")
+            response = client.images.generate(
+                model="gpt-image-1",
+                prompt=enhanced_prompt,
+                size=size,
+                quality="high",
+                n=1
+            )
 
         image_b64 = response.data[0].b64_json
 
         if not image_b64:
-            safe_print("Error: No image data received from DALL-E")
+            safe_print("Error: No image data received")
             return ""
 
         # Decode and save image
@@ -337,7 +449,7 @@ Additional requirements:
         filepath = output_dir / filename
 
         img.save(filepath)
-        safe_print(f"Image saved: {filename}")
+        safe_print(f"✓ Imagen guardada: {filename}")
 
         return str(filepath)
 
