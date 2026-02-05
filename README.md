@@ -30,8 +30,11 @@ cd agipro-agent
 # macOS/Linux:
 ./install.sh
 
-# Windows:
+# Windows (Command Prompt - cmd.exe):
 install.bat
+
+# Windows (PowerShell):
+.\install.bat
 ```
 
 **Option 2: Manual installation**
@@ -148,6 +151,26 @@ DAYS_TO_GENERATE=2
   - Embeddings API (for RAG memory search)
 
 ## Troubleshooting
+
+### Windows: "install.bat no se reconoce" in PowerShell
+In PowerShell, you need to use `.\` prefix:
+```powershell
+.\install.bat
+```
+Or use Command Prompt (cmd.exe) instead.
+
+### Windows: "Microsoft Visual C++ 14.0 required" error
+If you see errors about `hnswlib` or C++ Build Tools, first ensure you're using the latest requirements:
+```bash
+pip install --upgrade pip
+pip install -r src/requirements.txt
+```
+
+If the error persists, you may have an old cached package. Clear and reinstall:
+```bash
+pip cache purge
+pip install -r src/requirements.txt
+```
 
 ### "Module not found" errors
 Make sure you've activated the virtual environment:

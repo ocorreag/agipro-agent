@@ -14,8 +14,9 @@ openai
 pandas
 pydantic>=2.0
 
-# Vector database (uses OpenAI embeddings - no local models needed)
-chromadb
+# Vector database - pinned to version with pre-built Windows wheels
+# (older versions require C++ compilation and pull in torch/sentence-transformers)
+chromadb>=0.5.0,<0.6.0
 
 # Web search
 ddgs
